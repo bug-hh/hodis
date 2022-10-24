@@ -1,9 +1,10 @@
 package main
 
+// 用 go 实现 redis
+// https://www.cnblogs.com/Finley/category/1598973.html
+
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"net"
 )
@@ -25,26 +26,13 @@ func ListenAndServe(address string) {
 			log.Fatal(fmt.Sprintf("accept err: %v", err))
 		}
 		// 使用协程来处理新连接
-		go Handler(conn)
+		Handler(conn)
 	}
 }
 
 func Handler(conn net.Conn) {
-	reader := bufio.NewReader(conn)
+	// reader := bufio.NewReader(conn)
 
-	for {
-		msg, err := reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				log.Println("connection closed")
-			} else {
-				log.Println(err)
-			}
-			return
-		}
-		b := []byte(msg)
-		conn.Write(b)
-	}
 }
 
 func main() {
