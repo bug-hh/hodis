@@ -42,7 +42,13 @@ func NewStandaloneServer() *MultiDB {
 		mdb.dbSet[i] = holder
 	}
 
+	// todo 以后实现订阅，发布功能
 
+	// todo 以后实现 aof 功能
+
+	// todo 以后实现 rdb 功能
+
+	// todo 以后实现 复制 功能
 	return mdb
 }
 
@@ -56,7 +62,11 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	}()
 
 	cmdName := strings.ToLower(string(cmdLine[0]))
+	logger.Info("MultiDB cmdName: ", cmdName)
 	// todo 之后实现 authenticate
+	if cmdName == "auth" {
+
+	}
 
 	// todo 之后实现 slave
 
@@ -71,6 +81,7 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		return errReply
 	}
 
+	return selectDB.Exec(c, cmdLine)
 }
 
 
@@ -81,4 +92,17 @@ func (mdb *MultiDB) selectDB(dbIndex int) (*DB, *protocol.StandardErrReply) {
 
 	return mdb.dbSet[dbIndex].Load().(*DB), nil
 }
+
+
+// AfterClientClose does some clean after client close connection
+func (mdb *MultiDB) AfterClientClose(c redis.Connection) {
+
+}
+
+// Close graceful shutdown database
+func (mdb *MultiDB) Close() {
+	// stop replication first
+
+}
+
 

@@ -9,3 +9,8 @@ type DB interface {
 	AfterClientClose(c redis.Connection)
 	Close()
 }
+
+
+type DataEntity struct {
+	Data interface{}
+}

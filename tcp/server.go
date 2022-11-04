@@ -81,6 +81,7 @@ func ListenAndServe(listener net.Listener, handler tcp.Handler, closeChan <-chan
 			defer func() {
 				waitDone.Done()
 			}()
+			logger.Info("开始处理连接: ", conn.RemoteAddr().String())
 			handler.Handle(ctx, conn)
 		}()
 	}

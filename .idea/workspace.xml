@@ -2,7 +2,22 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="ca7db3ff-d765-494d-9330-d429c5ccb6d9" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/tcp/server.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/database/keys.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lib/sync/wait/wait.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/redis/connection/conn.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/database/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/database.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/database/single_db.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/single_db.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/interface/database/db.go" beforeDir="false" afterPath="$PROJECT_DIR$/interface/database/db.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/timewheel/timewheel.go" beforeDir="false" afterPath="$PROJECT_DIR$/lib/timewheel/timewheel.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/utils/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/lib/utils/utils.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/parser/parser.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/parser/parser.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/parser/parser_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/parser/parser_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/protocol/consts.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/consts.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/protocol/errors.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/errors.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/server/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/server/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tcp/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/tcp/server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -41,9 +56,38 @@
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/redis" />
       <recent name="$PROJECT_DIR$/tcp" />
       <recent name="$PROJECT_DIR$/redis/server" />
     </key>
+  </component>
+  <component name="RunManager" selected="Go Build.go build github.com/hodis/script">
+    <configuration name="go build github.com/hodis/script" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="hodis" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <filePath value="$PROJECT_DIR$/script/probe.go" />
+      <package value="github.com/hodis/script" />
+      <directory value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestParseStream in github.com/hodis/redis/parser" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hodis" />
+      <working_directory value="$PROJECT_DIR$/redis/parser" />
+      <framework value="gotest" />
+      <kind value="PACKAGE" />
+      <package value="github.com/hodis/redis/parser" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <pattern value="^\QTestParseStream\E$" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Go Build.go build github.com/hodis/script" />
+        <item itemvalue="Go Test.TestParseStream in github.com/hodis/redis/parser" />
+      </list>
+    </recent_temporary>
   </component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TypeScriptGeneratedFilesManager">
@@ -59,6 +103,7 @@
         </entry>
       </map>
     </option>
+    <option name="oldMeFiltersMigrated" value="true" />
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>

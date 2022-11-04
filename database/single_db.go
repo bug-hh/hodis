@@ -3,6 +3,7 @@ package database
 import (
 	"github.com/hodis/datastruct/dict"
 	"github.com/hodis/datastruct/lock"
+	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
 	"github.com/hodis/lib/timewheel"
 	"github.com/hodis/redis/protocol"
@@ -151,11 +152,58 @@ func (db *DB) Expire(key string, expireTime time.Time) {
 
 }
 
+func (db *DB) Persist(key string) {
+	db.ttlMap.Remove(key)
+	taskKey := genExpireTask(key)
+	timewheel.Cancel(taskKey)
+}
+
+func (db *DB) IsExpired(key string) bool {
+	rawExpireTime, ok := db.ttlMap.Get(key)
+	if !ok {
+		return false
+	}
+	expireTime, _ := rawExpireTime.(time.Time)
+	expired := time.Now().After(expireTime)
+	if expired {
+		db.Remove(key)
+	}
+	return expired
+}
+
 func (db *DB) Remove(key string) {
 	db.data.Remove(key)
 	db.ttlMap.Remove(key)
 	taskKey := genExpireTask(key)
 	timewheel.Cancel(taskKey)
+}
+
+
+// Data access
+func (db *DB) GetEntity(key string) (*database.DataEntity, bool) {
+	raw, ok := db.data.Get(key)
+	if !ok {
+		return nil, false
+	}
+
+	if db.IsExpired(key) {
+		return nil, false
+	}
+	entity, _ := raw.(*database.DataEntity)
+	return entity, true
+
+}
+
+func (db *DB) PutEntity(key string, entity *database.DataEntity) int {
+	return db.data.Put(key, entity)
+}
+
+func (db *DB) PutIfExists(key string, entity *database.DataEntity) int {
+	return db.data.PutIfExists(key, entity)
+}
+
+func (db *DB) PutIfAbsent(key string, entity *database.DataEntity) int {
+	return db.data.PutIfAbsent(key, entity)
 }
 
 

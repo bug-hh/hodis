@@ -1,0 +1,211 @@
+[INFO][server.go:36] 2022/11/02 06:23:36 开启单机模式
+[INFO][server.go:45] 2022/11/02 06:23:36 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:54] 2022/11/02 06:24:05 shutting down...
+[INFO][server.go:107] 2022/11/02 06:24:05 handler shutting down...
+[INFO][server.go:36] 2022/11/02 06:25:45 开启单机模式
+[INFO][server.go:45] 2022/11/02 06:25:45 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 06:26:05 accept link
+[INFO][server.go:63] 2022/11/02 06:27:15 connection closed: 127.0.0.1:53631
+[INFO][server.go:54] 2022/11/02 06:27:23 shutting down...
+[INFO][server.go:107] 2022/11/02 06:27:23 handler shutting down...
+[INFO][server.go:36] 2022/11/02 06:32:40 开启单机模式
+[INFO][server.go:45] 2022/11/02 06:32:40 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 06:32:45 accept link
+[INFO][server.go:63] 2022/11/02 06:36:27 connection closed: 127.0.0.1:54636
+[INFO][server.go:54] 2022/11/02 06:36:30 shutting down...
+[INFO][server.go:108] 2022/11/02 06:36:30 handler shutting down...
+[INFO][server.go:36] 2022/11/02 06:36:39 开启单机模式
+[INFO][server.go:45] 2022/11/02 06:36:40 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 06:36:43 accept link
+[INFO][server.go:84] 2022/11/02 06:36:43 开始处理连接:  127.0.0.1:55227
+[INFO][server.go:54] 2022/11/02 06:36:43 开始解析 stream
+[INFO][server.go:63] 2022/11/02 06:43:12 connection closed: 127.0.0.1:55227
+[INFO][server.go:54] 2022/11/02 06:43:16 shutting down...
+[INFO][server.go:108] 2022/11/02 06:43:16 handler shutting down...
+[INFO][server.go:36] 2022/11/02 07:07:31 开启单机模式
+[INFO][server.go:45] 2022/11/02 07:07:31 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 07:07:35 accept link
+[INFO][server.go:84] 2022/11/02 07:07:35 开始处理连接:  127.0.0.1:59953
+[INFO][server.go:54] 2022/11/02 07:07:35 开始解析 stream
+[INFO][server.go:56] 2022/11/02 07:07:35 
+[INFO][server.go:64] 2022/11/02 07:08:30 connection closed: 127.0.0.1:59953
+[INFO][server.go:54] 2022/11/02 07:08:35 shutting down...
+[INFO][server.go:109] 2022/11/02 07:08:35 handler shutting down...
+[INFO][server.go:36] 2022/11/02 07:08:39 开启单机模式
+[INFO][server.go:45] 2022/11/02 07:08:39 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 07:08:43 accept link
+[INFO][server.go:84] 2022/11/02 07:08:43 开始处理连接:  127.0.0.1:60122
+[INFO][server.go:54] 2022/11/02 07:08:43 开始解析 stream
+[INFO][server.go:56] 2022/11/02 07:08:43 解析完成
+[INFO][server.go:64] 2022/11/02 07:08:59 connection closed: 127.0.0.1:60122
+[INFO][server.go:54] 2022/11/02 07:09:02 shutting down...
+[INFO][server.go:109] 2022/11/02 07:09:02 handler shutting down...
+[INFO][server.go:36] 2022/11/02 07:12:43 开启单机模式
+[INFO][server.go:45] 2022/11/02 07:12:43 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 07:12:46 accept link
+[INFO][server.go:84] 2022/11/02 07:12:46 开始处理连接:  127.0.0.1:60737
+[INFO][server.go:54] 2022/11/02 07:12:46 开始解析 stream
+[INFO][server.go:56] 2022/11/02 07:12:46 解析完成
+[INFO][parser.go:84] 2022/11/02 07:12:46 readLine 成功:  *1
+
+[INFO][parser.go:73] 2022/11/02 07:13:25 发生 io err
+[INFO][server.go:64] 2022/11/02 07:13:25 connection closed: 127.0.0.1:60737
+[INFO][server.go:54] 2022/11/02 07:13:30 shutting down...
+[INFO][server.go:109] 2022/11/02 07:13:30 handler shutting down...
+[INFO][server.go:36] 2022/11/02 10:56:01 开启单机模式
+[INFO][server.go:45] 2022/11/02 10:56:01 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 10:56:05 accept link
+[INFO][server.go:84] 2022/11/02 10:56:05 开始处理连接:  127.0.0.1:55493
+[INFO][server.go:54] 2022/11/02 10:56:05 开始解析 stream
+[INFO][server.go:56] 2022/11/02 10:56:05 解析完成
+[INFO][parser.go:84] 2022/11/02 10:56:05 readLine 成功:  *1
+
+[INFO][parser.go:87] 2022/11/02 10:56:05 !state.readingMultiLine
+[INFO][parser.go:90] 2022/11/02 10:56:05 msg[0]:  42
+[INFO][parser.go:73] 2022/11/02 10:57:19 发生 io err
+[INFO][server.go:64] 2022/11/02 10:57:19 connection closed: 127.0.0.1:55493
+[INFO][server.go:54] 2022/11/02 10:57:22 shutting down...
+[INFO][server.go:109] 2022/11/02 10:57:22 handler shutting down...
+[INFO][server.go:36] 2022/11/02 11:00:17 开启单机模式
+[INFO][server.go:45] 2022/11/02 11:00:18 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 11:00:20 accept link
+[INFO][server.go:84] 2022/11/02 11:00:20 开始处理连接:  127.0.0.1:56318
+[INFO][server.go:54] 2022/11/02 11:00:20 开始解析 stream
+[INFO][server.go:56] 2022/11/02 11:00:20 解析完成
+[INFO][parser.go:84] 2022/11/02 11:00:20 readLine 成功:  *1
+
+[INFO][parser.go:87] 2022/11/02 11:00:20 !state.readingMultiLine
+[INFO][parser.go:90] 2022/11/02 11:00:20 msg[0]:  42
+[INFO][parser.go:73] 2022/11/02 11:00:57 发生 io err
+[INFO][server.go:64] 2022/11/02 11:00:57 connection closed: 127.0.0.1:56318
+[INFO][server.go:54] 2022/11/02 11:01:01 shutting down...
+[INFO][server.go:109] 2022/11/02 11:01:01 handler shutting down...
+[INFO][server.go:36] 2022/11/02 11:16:16 开启单机模式
+[INFO][server.go:45] 2022/11/02 11:16:16 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 11:16:22 accept link
+[INFO][server.go:84] 2022/11/02 11:16:22 开始处理连接:  127.0.0.1:58872
+[INFO][server.go:54] 2022/11/02 11:16:22 开始解析 stream
+[INFO][server.go:56] 2022/11/02 11:16:22 解析完成
+[INFO][parser.go:73] 2022/11/02 11:23:05 发生 io err
+[INFO][server.go:64] 2022/11/02 11:23:05 connection closed: 127.0.0.1:58872
+[INFO][server.go:77] 2022/11/02 11:23:42 accept link
+[INFO][server.go:84] 2022/11/02 11:23:42 开始处理连接:  127.0.0.1:60024
+[INFO][server.go:54] 2022/11/02 11:23:42 开始解析 stream
+[INFO][server.go:56] 2022/11/02 11:23:42 解析完成
+[INFO][parser.go:56] 2022/11/02 11:23:56 runtime error: index out of range [-1]
+[INFO][server.go:77] 2022/11/02 11:24:28 accept link
+[INFO][server.go:84] 2022/11/02 11:24:28 开始处理连接:  127.0.0.1:60146
+[INFO][server.go:54] 2022/11/02 11:24:28 开始解析 stream
+[INFO][server.go:56] 2022/11/02 11:24:28 解析完成
+[INFO][parser.go:77] 2022/11/02 11:24:34 readline err
+[INFO][parser.go:56] 2022/11/02 11:24:49 runtime error: index out of range [-1]
+[INFO][server.go:77] 2022/11/02 11:25:02 accept link
+[INFO][server.go:84] 2022/11/02 11:25:02 开始处理连接:  127.0.0.1:60230
+[INFO][server.go:54] 2022/11/02 11:25:02 开始解析 stream
+[INFO][server.go:56] 2022/11/02 11:25:02 解析完成
+[INFO][parser.go:77] 2022/11/02 11:25:07 readline err
+[INFO][parser.go:77] 2022/11/02 11:25:12 readline err
+[INFO][parser.go:77] 2022/11/02 11:25:15 readline err
+[INFO][parser.go:77] 2022/11/02 11:25:23 readline err
+[INFO][parser.go:73] 2022/11/02 11:25:28 发生 io err
+[INFO][server.go:64] 2022/11/02 11:25:28 connection closed: 127.0.0.1:60230
+[INFO][server.go:77] 2022/11/02 11:25:34 accept link
+[INFO][server.go:84] 2022/11/02 11:25:34 开始处理连接:  127.0.0.1:60310
+[INFO][server.go:54] 2022/11/02 11:25:34 开始解析 stream
+[INFO][server.go:56] 2022/11/02 11:25:34 解析完成
+[INFO][parser.go:84] 2022/11/02 11:25:34 readLine 成功:  *1
+
+[INFO][parser.go:87] 2022/11/02 11:25:34 !state.readingMultiLine
+[INFO][parser.go:90] 2022/11/02 11:25:34 msg[0]:  42
+[INFO][server.go:54] 2022/11/02 11:26:31 shutting down...
+[INFO][server.go:109] 2022/11/02 11:26:31 handler shutting down...
+[INFO][parser.go:73] 2022/11/02 11:26:31 发生 io err
+[INFO][server.go:64] 2022/11/02 11:26:31 connection closed: 127.0.0.1:60310
+[INFO][server.go:36] 2022/11/02 13:00:50 开启单机模式
+[INFO][server.go:45] 2022/11/02 13:00:50 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 13:00:58 accept link
+[INFO][server.go:84] 2022/11/02 13:00:58 开始处理连接:  127.0.0.1:58187
+[INFO][server.go:54] 2022/11/02 13:00:58 开始解析 stream
+[INFO][server.go:56] 2022/11/02 13:00:58 解析完成
+[INFO][parser.go:77] 2022/11/02 13:01:06 readline err
+[INFO][parser.go:77] 2022/11/02 13:01:17 readline err
+[INFO][parser.go:73] 2022/11/02 13:04:31 发生 io err
+[INFO][server.go:64] 2022/11/02 13:04:31 connection closed: 127.0.0.1:58187
+[INFO][server.go:54] 2022/11/02 13:04:33 shutting down...
+[INFO][server.go:109] 2022/11/02 13:04:33 handler shutting down...
+[INFO][server.go:36] 2022/11/02 13:04:35 开启单机模式
+[INFO][server.go:45] 2022/11/02 13:04:36 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 13:04:38 accept link
+[INFO][server.go:84] 2022/11/02 13:04:38 开始处理连接:  127.0.0.1:58818
+[INFO][server.go:54] 2022/11/02 13:04:38 开始解析 stream
+[INFO][server.go:56] 2022/11/02 13:04:38 解析完成
+[INFO][parser.go:77] 2022/11/02 13:04:45 readline err
+[INFO][parser.go:251] 2022/11/02 13:05:49 readBytes err EOF
+[INFO][parser.go:73] 2022/11/02 13:05:49 发生 io err
+[INFO][server.go:64] 2022/11/02 13:05:49 connection closed: 127.0.0.1:58818
+[INFO][server.go:54] 2022/11/02 13:05:52 shutting down...
+[INFO][server.go:109] 2022/11/02 13:05:52 handler shutting down...
+[INFO][server.go:36] 2022/11/02 13:05:55 开启单机模式
+[INFO][server.go:45] 2022/11/02 13:05:55 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 13:05:57 accept link
+[INFO][server.go:84] 2022/11/02 13:05:57 开始处理连接:  127.0.0.1:59031
+[INFO][server.go:54] 2022/11/02 13:05:57 开始解析 stream
+[INFO][server.go:56] 2022/11/02 13:05:57 解析完成
+[INFO][parser.go:254] 2022/11/02 13:06:04 readLine len(msg):  16
+[INFO][parser.go:77] 2022/11/02 13:06:04 readline err
+[INFO][parser.go:251] 2022/11/02 13:06:47 readBytes err EOF
+[INFO][parser.go:73] 2022/11/02 13:06:47 发生 io err
+[INFO][server.go:64] 2022/11/02 13:06:47 connection closed: 127.0.0.1:59031
+[INFO][server.go:54] 2022/11/02 13:06:50 shutting down...
+[INFO][server.go:109] 2022/11/02 13:06:50 handler shutting down...
+[INFO][server.go:36] 2022/11/02 13:06:52 开启单机模式
+[INFO][server.go:45] 2022/11/02 13:06:52 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 13:06:55 accept link
+[INFO][server.go:84] 2022/11/02 13:06:55 开始处理连接:  127.0.0.1:59188
+[INFO][server.go:54] 2022/11/02 13:06:55 开始解析 stream
+[INFO][server.go:56] 2022/11/02 13:06:55 解析完成
+[INFO][parser.go:254] 2022/11/02 13:07:09 readLine len(msg):  16
+[INFO][parser.go:256] 2022/11/02 13:07:09 readLine protocol error
+[INFO][parser.go:77] 2022/11/02 13:07:09 readline err
+[INFO][parser.go:251] 2022/11/02 13:19:34 readBytes err EOF
+[INFO][parser.go:73] 2022/11/02 13:19:34 发生 io err
+[INFO][server.go:64] 2022/11/02 13:19:34 connection closed: 127.0.0.1:59188
+[INFO][server.go:54] 2022/11/02 13:19:36 shutting down...
+[INFO][server.go:109] 2022/11/02 13:19:36 handler shutting down...
+[INFO][server.go:36] 2022/11/02 13:19:39 开启单机模式
+[INFO][server.go:45] 2022/11/02 13:19:39 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/02 13:19:42 accept link
+[INFO][server.go:84] 2022/11/02 13:19:42 开始处理连接:  127.0.0.1:61309
+[INFO][server.go:54] 2022/11/02 13:19:42 开始解析 stream
+[INFO][server.go:56] 2022/11/02 13:19:42 解析完成
+[INFO][parser.go:254] 2022/11/02 13:19:48 readLine len(msg):  17
+[INFO][parser.go:84] 2022/11/02 13:19:48 readLine 成功:  set hello hodis
+
+[INFO][parser.go:87] 2022/11/02 13:19:48 !state.readingMultiLine
+[INFO][parser.go:136] 2022/11/02 13:19:48 parseSingleLineReply success: *3
+$3
+set
+$5
+hello
+$5
+hodis
+
+[INFO][server.go:91] 2022/11/02 13:19:48 开始执行命令
+[INFO][database.go:65] 2022/11/02 13:19:48 MultiDB cmdName:  set
+[INFO][parser.go:254] 2022/11/02 13:20:03 readLine len(msg):  11
+[INFO][parser.go:84] 2022/11/02 13:20:03 readLine 成功:  get hello
+
+[INFO][parser.go:87] 2022/11/02 13:20:03 !state.readingMultiLine
+[INFO][parser.go:136] 2022/11/02 13:20:03 parseSingleLineReply success: *2
+$3
+get
+$5
+hello
+
+[INFO][server.go:91] 2022/11/02 13:20:03 开始执行命令
+[INFO][database.go:65] 2022/11/02 13:20:03 MultiDB cmdName:  get
+[INFO][parser.go:251] 2022/11/02 13:20:13 readBytes err EOF
+[INFO][parser.go:73] 2022/11/02 13:20:13 发生 io err
+[INFO][server.go:64] 2022/11/02 13:20:13 connection closed: 127.0.0.1:61309
+[INFO][server.go:54] 2022/11/02 13:20:16 shutting down...
+[INFO][server.go:109] 2022/11/02 13:20:16 handler shutting down...

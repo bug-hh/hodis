@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/hodis/config"
 	"github.com/hodis/lib/logger"
+	"github.com/hodis/redis/server"
 	"github.com/hodis/tcp"
 	"os"
 )
@@ -54,5 +55,8 @@ func main() {
 		Address: fmt.Sprintf("%s:%d", config.Properties.Bind, config.Properties.Port),
 	}
 
-	err := tcp.ListenAndServeWithSignal(tcpServerConfig, )
+	err := tcp.ListenAndServeWithSignal(tcpServerConfig, server.MakeHandler())
+	if err != nil {
+		logger.Error(err)
+	}
 }

@@ -25,3 +25,20 @@ func (n *NullBulkReply) ToBytes() []byte {
 func MakeNullBulkReply() *NullBulkReply {
 	return &NullBulkReply{}
 }
+
+// OkReply is +OK
+type OkReply struct{}
+
+var okBytes = []byte("+OK\r\n")
+
+// ToBytes marshal redis.Reply
+func (r *OkReply) ToBytes() []byte {
+	return okBytes
+}
+
+var theOkReply = new(OkReply)
+
+// MakeOkReply returns a ok protocol
+func MakeOkReply() *OkReply {
+	return theOkReply
+}

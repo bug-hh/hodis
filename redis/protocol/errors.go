@@ -34,3 +34,46 @@ func MakeArgNumErrReply(cmd string) *ArgNumErrReply {
 		Cmd: cmd,
 	}
 }
+
+/* ---- Error Reply ---- */
+
+// ErrorReply is an error and redis.Reply
+type ErrorReply interface {
+	Error() string
+	ToBytes() []byte
+}
+
+
+// WrongTypeErrReply represents operation against a key holding the wrong kind of value
+type WrongTypeErrReply struct{}
+
+var wrongTypeErrBytes = []byte("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n")
+
+// ToBytes marshals redis.Reply
+func (r *WrongTypeErrReply) ToBytes() []byte {
+	return wrongTypeErrBytes
+}
+
+func (r *WrongTypeErrReply) Error() string {
+	return "WRONGTYPE Operation against a key holding the wrong kind of value"
+}
+
+// SyntaxErrReply represents meeting unexpected arguments
+type SyntaxErrReply struct{}
+
+var syntaxErrBytes = []byte("-Err syntax error\r\n")
+var theSyntaxErrReply = &SyntaxErrReply{}
+
+// MakeSyntaxErrReply creates syntax error
+func MakeSyntaxErrReply() *SyntaxErrReply {
+	return theSyntaxErrReply
+}
+
+// ToBytes marshals redis.Reply
+func (r *SyntaxErrReply) ToBytes() []byte {
+	return syntaxErrBytes
+}
+
+func (r *SyntaxErrReply) Error() string {
+	return "Err syntax error"
+}

@@ -1,0 +1,177 @@
+[INFO][server.go:36] 2022/11/04 07:25:43 开启单机模式
+[INFO][server.go:45] 2022/11/04 07:25:44 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/04 07:26:00 accept link
+[INFO][server.go:84] 2022/11/04 07:26:00 开始处理连接:  127.0.0.1:57088
+[INFO][server.go:54] 2022/11/04 07:26:00 开始解析 stream
+[INFO][server.go:56] 2022/11/04 07:26:00 解析完成
+[INFO][parser.go:254] 2022/11/04 07:26:09 readLine len(msg):  4
+[INFO][parser.go:84] 2022/11/04 07:26:09 readLine 成功:  *3
+
+[INFO][parser.go:87] 2022/11/04 07:26:09 !state.readingMultiLine
+[INFO][parser.go:90] 2022/11/04 07:26:09 msg[0]:  42
+[INFO][parser.go:251] 2022/11/04 07:26:48 readBytes err EOF
+[INFO][parser.go:73] 2022/11/04 07:26:48 发生 io err
+[INFO][server.go:64] 2022/11/04 07:26:48 connection closed: 127.0.0.1:57088
+[INFO][server.go:77] 2022/11/04 07:26:55 accept link
+[INFO][server.go:84] 2022/11/04 07:26:55 开始处理连接:  127.0.0.1:57236
+[INFO][server.go:54] 2022/11/04 07:26:55 开始解析 stream
+[INFO][server.go:56] 2022/11/04 07:26:55 解析完成
+[INFO][parser.go:254] 2022/11/04 07:27:00 readLine len(msg):  4
+[INFO][parser.go:84] 2022/11/04 07:27:00 readLine 成功:  *3
+
+[INFO][parser.go:87] 2022/11/04 07:27:00 !state.readingMultiLine
+[INFO][parser.go:90] 2022/11/04 07:27:00 msg[0]:  42
+[INFO][parser.go:251] 2022/11/04 07:27:22 readBytes err EOF
+[INFO][parser.go:73] 2022/11/04 07:27:22 发生 io err
+[INFO][server.go:64] 2022/11/04 07:27:22 connection closed: 127.0.0.1:57236
+[INFO][server.go:54] 2022/11/04 11:54:18 shutting down...
+[INFO][server.go:109] 2022/11/04 11:54:18 handler shutting down...
+[INFO][server.go:36] 2022/11/04 11:54:25 开启单机模式
+[INFO][server.go:45] 2022/11/04 11:54:25 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/04 11:54:31 accept link
+[INFO][server.go:84] 2022/11/04 11:54:31 开始处理连接:  127.0.0.1:64076
+[INFO][server.go:54] 2022/11/04 11:54:31 开始解析 stream
+[INFO][server.go:56] 2022/11/04 11:54:31 解析完成
+[INFO][parser.go:258] 2022/11/04 11:54:36 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:54:36 readLine 成功:  *3
+
+[INFO][parser.go:91] 2022/11/04 11:54:36 !state.readingMultiLine
+[INFO][parser.go:94] 2022/11/04 11:54:36 msg[0]:  42
+[INFO][parser.go:258] 2022/11/04 11:54:36 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:54:36 readLine 成功:  $3
+
+[INFO][parser.go:88] 2022/11/04 11:54:36 readLine 成功:  set
+
+[INFO][parser.go:258] 2022/11/04 11:54:36 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:54:36 readLine 成功:  $3
+
+[INFO][parser.go:88] 2022/11/04 11:54:36 readLine 成功:  key
+
+[INFO][parser.go:258] 2022/11/04 11:54:36 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:54:36 readLine 成功:  $5
+
+[INFO][parser.go:88] 2022/11/04 11:54:36 readLine 成功:  value
+
+[INFO][server.go:91] 2022/11/04 11:54:36 开始执行命令
+[INFO][database.go:65] 2022/11/04 11:54:36 MultiDB cmdName:  set
+[INFO][parser.go:167] 2022/11/04 11:54:36 state finished: &{Args:[[115 101 116] [107 101 121] [118 97 108 117 101]]}
+[INFO][parser.go:258] 2022/11/04 11:54:46 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:54:46 readLine 成功:  *2
+
+[INFO][parser.go:91] 2022/11/04 11:54:46 !state.readingMultiLine
+[INFO][parser.go:94] 2022/11/04 11:54:46 msg[0]:  42
+[INFO][parser.go:258] 2022/11/04 11:54:46 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:54:46 readLine 成功:  $3
+
+[INFO][parser.go:88] 2022/11/04 11:54:46 readLine 成功:  get
+
+[INFO][parser.go:258] 2022/11/04 11:54:46 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:54:46 readLine 成功:  $3
+
+[INFO][parser.go:88] 2022/11/04 11:54:46 readLine 成功:  key
+
+[INFO][parser.go:167] 2022/11/04 11:54:46 state finished: &{Args:[[103 101 116] [107 101 121]]}
+[INFO][server.go:91] 2022/11/04 11:54:46 开始执行命令
+[INFO][database.go:65] 2022/11/04 11:54:46 MultiDB cmdName:  get
+[INFO][parser.go:258] 2022/11/04 11:55:03 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:55:03 readLine 成功:  *3
+
+[INFO][parser.go:91] 2022/11/04 11:55:03 !state.readingMultiLine
+[INFO][parser.go:94] 2022/11/04 11:55:03 msg[0]:  42
+[INFO][parser.go:258] 2022/11/04 11:55:03 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:55:03 readLine 成功:  $3
+
+[INFO][parser.go:88] 2022/11/04 11:55:03 readLine 成功:  set
+
+[INFO][parser.go:258] 2022/11/04 11:55:03 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:55:03 readLine 成功:  $1
+
+[INFO][parser.go:88] 2022/11/04 11:55:03 readLine 成功:  k
+
+[INFO][parser.go:258] 2022/11/04 11:55:03 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:55:03 readLine 成功:  $1
+
+[INFO][parser.go:88] 2022/11/04 11:55:03 readLine 成功:  v
+
+[INFO][parser.go:167] 2022/11/04 11:55:03 state finished: &{Args:[[115 101 116] [107] [118]]}
+[INFO][server.go:91] 2022/11/04 11:55:03 开始执行命令
+[INFO][database.go:65] 2022/11/04 11:55:03 MultiDB cmdName:  set
+[INFO][parser.go:258] 2022/11/04 11:55:07 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:55:07 readLine 成功:  *2
+
+[INFO][parser.go:91] 2022/11/04 11:55:07 !state.readingMultiLine
+[INFO][parser.go:94] 2022/11/04 11:55:07 msg[0]:  42
+[INFO][parser.go:258] 2022/11/04 11:55:07 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:55:07 readLine 成功:  $3
+
+[INFO][parser.go:88] 2022/11/04 11:55:07 readLine 成功:  get
+
+[INFO][parser.go:258] 2022/11/04 11:55:07 readLine len(msg):  4
+[INFO][parser.go:88] 2022/11/04 11:55:07 readLine 成功:  $1
+
+[INFO][parser.go:88] 2022/11/04 11:55:07 readLine 成功:  k
+
+[INFO][parser.go:167] 2022/11/04 11:55:07 state finished: &{Args:[[103 101 116] [107]]}
+[INFO][server.go:91] 2022/11/04 11:55:07 开始执行命令
+[INFO][database.go:65] 2022/11/04 11:55:07 MultiDB cmdName:  get
+[INFO][parser.go:255] 2022/11/04 11:55:15 readBytes err EOF
+[INFO][parser.go:77] 2022/11/04 11:55:15 发生 io err
+[INFO][server.go:64] 2022/11/04 11:55:15 connection closed: 127.0.0.1:64076
+[INFO][server.go:54] 2022/11/04 11:55:18 shutting down...
+[INFO][server.go:109] 2022/11/04 11:55:18 handler shutting down...
+[INFO][server.go:36] 2022/11/04 12:02:56 开启单机模式
+[INFO][server.go:45] 2022/11/04 12:02:57 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/04 12:03:00 accept link
+[INFO][server.go:84] 2022/11/04 12:03:00 开始处理连接:  127.0.0.1:65453
+[INFO][server.go:54] 2022/11/04 12:03:00 开始解析 stream
+[INFO][server.go:56] 2022/11/04 12:03:00 解析完成
+[INFO][server.go:91] 2022/11/04 12:03:05 开始执行命令
+[INFO][database.go:65] 2022/11/04 12:03:05 MultiDB cmdName:  set
+[INFO][server.go:91] 2022/11/04 12:03:09 开始执行命令
+[INFO][database.go:65] 2022/11/04 12:03:09 MultiDB cmdName:  get
+[INFO][server.go:91] 2022/11/04 12:03:15 开始执行命令
+[INFO][database.go:65] 2022/11/04 12:03:15 MultiDB cmdName:  set
+[INFO][server.go:91] 2022/11/04 12:03:17 开始执行命令
+[INFO][database.go:65] 2022/11/04 12:03:17 MultiDB cmdName:  get
+[INFO][parser.go:76] 2022/11/04 12:03:23 发生 io err
+[INFO][server.go:64] 2022/11/04 12:03:23 connection closed: 127.0.0.1:65453
+[INFO][server.go:77] 2022/11/04 13:41:17 accept link
+[INFO][server.go:84] 2022/11/04 13:41:17 开始处理连接:  127.0.0.1:62044
+[INFO][server.go:54] 2022/11/04 13:41:17 开始解析 stream
+[INFO][server.go:56] 2022/11/04 13:41:17 解析完成
+[INFO][server.go:91] 2022/11/04 13:41:21 开始执行命令
+[INFO][database.go:65] 2022/11/04 13:41:21 MultiDB cmdName:  set
+[INFO][server.go:91] 2022/11/04 13:41:25 开始执行命令
+[INFO][database.go:65] 2022/11/04 13:41:25 MultiDB cmdName:  get
+[INFO][parser.go:76] 2022/11/04 13:41:40 发生 io err
+[INFO][server.go:64] 2022/11/04 13:41:40 connection closed: 127.0.0.1:62044
+[INFO][server.go:54] 2022/11/04 13:42:01 shutting down...
+[INFO][server.go:109] 2022/11/04 13:42:01 handler shutting down...
+[INFO][server.go:36] 2022/11/04 13:43:09 开启单机模式
+[INFO][server.go:45] 2022/11/04 13:43:09 bind: 0.0.0.0:6399, start listening...
+[INFO][server.go:77] 2022/11/04 13:43:38 accept link
+[INFO][server.go:84] 2022/11/04 13:43:38 开始处理连接:  127.0.0.1:62432
+[INFO][server.go:54] 2022/11/04 13:43:38 开始解析 stream
+[INFO][server.go:56] 2022/11/04 13:43:38 解析完成
+[INFO][server.go:91] 2022/11/04 13:43:42 开始执行命令
+[INFO][database.go:65] 2022/11/04 13:43:42 MultiDB cmdName:  set
+[INFO][server.go:91] 2022/11/04 13:43:45 开始执行命令
+[INFO][database.go:65] 2022/11/04 13:43:45 MultiDB cmdName:  get
+[INFO][server.go:91] 2022/11/04 13:43:55 开始执行命令
+[INFO][database.go:65] 2022/11/04 13:43:55 MultiDB cmdName:  set
+[INFO][server.go:91] 2022/11/04 13:43:59 开始执行命令
+[INFO][database.go:65] 2022/11/04 13:43:59 MultiDB cmdName:  get
+[INFO][parser.go:76] 2022/11/04 13:44:02 发生 io err
+[INFO][server.go:64] 2022/11/04 13:44:02 connection closed: 127.0.0.1:62432
+[INFO][server.go:77] 2022/11/04 13:44:10 accept link
+[INFO][server.go:84] 2022/11/04 13:44:10 开始处理连接:  127.0.0.1:62544
+[INFO][server.go:54] 2022/11/04 13:44:10 开始解析 stream
+[INFO][server.go:56] 2022/11/04 13:44:10 解析完成
+[INFO][server.go:91] 2022/11/04 13:44:17 开始执行命令
+[INFO][database.go:65] 2022/11/04 13:44:17 MultiDB cmdName:  set
+[INFO][server.go:91] 2022/11/04 13:44:20 开始执行命令
+[INFO][database.go:65] 2022/11/04 13:44:20 MultiDB cmdName:  get
+[INFO][parser.go:76] 2022/11/04 13:44:24 发生 io err
+[INFO][server.go:64] 2022/11/04 13:44:24 connection closed: 127.0.0.1:62544
+[INFO][server.go:54] 2022/11/04 13:44:28 shutting down...
+[INFO][server.go:109] 2022/11/04 13:44:28 handler shutting down...

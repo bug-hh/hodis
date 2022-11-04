@@ -3,8 +3,8 @@ package parser
 import (
 	"bufio"
 	"errors"
+	"github.com/hodis/lib/logger"
 	"io"
-	"log"
 	"strconv"
 	"strings"
 
@@ -36,6 +36,10 @@ func ParseStream(reader io.Reader) <-chan *Payload {
 	return ch
 }
 
+func Parse00(reader *bufio.Reader, ch chan<- *Payload) {
+	parse0(reader, ch)
+}
+
 type readState struct {
 	readingMultiLine  bool
 	expectedArgsCount int
@@ -49,11 +53,10 @@ func (s *readState) finished() bool {
 	return s.expectedArgsCount > 0 && len(s.args) == s.expectedArgsCount
 }
 
-// 参数还缺个 chan 通道
 func parse0(reader io.Reader, ch chan<- *Payload) {
 	defer func() {
 		if err := recover(); err != nil {
-			log.Println(err)
+			logger.Info(err)
 		}
 	}()
 
@@ -64,25 +67,28 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 	for {
 		// read line
 		var ioErr bool
-		msg, ioErr, err = readLine(*bufReader, &state)
+		msg, ioErr, err = readLine(bufReader, &state)
 		if err != nil {
 			if ioErr {
 				ch <- &Payload{
 					Err: err,
 				}
+				logger.Info("发生 io err")
 				close(ch)
 				return
+			}
+			ch <- &Payload{
+				Err: err,
 			}
 			state = readState{}
 			continue
 		}
-
 		// parse line
 		if !state.readingMultiLine {
 			// 数组
 			if msg[0] == '*' {
 				// 这里主要是用来更新 state 里面的字段
-				err := parseMultiBulkHeader(msg, &state)
+				err = parseMultiBulkHeader(msg, &state)
 				if err != nil {
 					ch <- &Payload{
 						Err: errors.New("protocol error: " + string(msg)),
@@ -101,7 +107,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 			} else if msg[0] == '$' {
 				// 字符串
 				// 更新 state 里的字段
-				err := parseBulkHeader(msg, &state)
+				err = parseBulkHeader(msg, &state)
 				if err != nil {
 					ch <- &Payload{
 						Err: errors.New("protocol error: " + string(msg)),
@@ -124,7 +130,6 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 					Data: result,
 					Err:  err,
 				}
-				log.Printf("parseSingleLineReply success: %+v", string(result.ToBytes()))
 				state = readState{}
 				continue
 			}
@@ -150,7 +155,6 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 					Data: result,
 					Err:  err,
 				}
-				log.Printf("state finished: %+v", result)
 				state = readState{}
 			}
 		}
@@ -229,7 +233,7 @@ func parseMultiBulkHeader(msg []byte, state *readState) error {
 		return errors.New("protocol error: " + string(msg))
 	}
 }
-func readLine(bufReader bufio.Reader, state *readState) ([]byte, bool, error) {
+func readLine(bufReader *bufio.Reader, state *readState) ([]byte, bool, error) {
 	var msg []byte
 	var err error
 	// 读取非二进制安全数据，也有可能是二进制安全数据，这是一个初始状态
@@ -249,8 +253,8 @@ func readLine(bufReader bufio.Reader, state *readState) ([]byte, bool, error) {
 		if state.readingRepl {
 			bulkLen -= 2
 		}
-		msg := make([]byte, bulkLen)
-		_, err = io.ReadFull(&bufReader, msg)
+		msg = make([]byte, bulkLen)
+		_, err = io.ReadFull(bufReader, msg)
 		if err != nil {
 			return nil, true, err
 		}
@@ -263,7 +267,7 @@ func readBody(msg []byte, state *readState) error {
 	line := msg[0 : len(msg)-2]
 	var err error
 	if len(line) > 0 && line[0] == '$' {
-		state.bulkLen, err = strconv.ParseInt(string(msg[1:]), 10, 64)
+		state.bulkLen, err = strconv.ParseInt(string(line[1:]), 10, 64)
 		if err != nil {
 			return errors.New("protocol error: " + string(msg))
 		}
