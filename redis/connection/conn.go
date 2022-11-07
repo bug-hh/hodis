@@ -1,6 +1,7 @@
 package connection
 
 import (
+	"bytes"
 	"github.com/hodis/lib/sync/wait"
 	"net"
 	"sync"
@@ -180,4 +181,23 @@ func (c *Connection) GetDBIndex() int {
 // SelectDB selects a database
 func (c *Connection) SelectDB(dbNum int) {
 	c.selectedDB = dbNum
+}
+
+// 伪客户端用于执行 aof 文件里的命令
+type FakeConn struct {
+	Connection
+	buf bytes.Buffer
+}
+
+func (c *FakeConn) Write(b []byte) error {
+	c.buf.Write(b)
+	return nil
+}
+
+func (c *FakeConn) Clean() {
+	c.buf.Reset()
+}
+
+func (c *FakeConn) Bytes() []byte {
+	return c.buf.Bytes()
 }

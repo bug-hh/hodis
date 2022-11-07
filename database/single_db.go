@@ -53,6 +53,19 @@ func MakeDB() *DB {
 	}
 }
 
+// makeBasicDB create DB instance only with basic abilities.
+// It is not concurrent safe
+func makeBasicDB() *DB {
+	db := &DB{
+		data: dict.MakeSimple(),
+		ttlMap: dict.MakeSimple(),
+		versionMap: dict.MakeSimple(),
+		locker: lock.Make(1),
+		addAof: func(line CmdLine) {},
+	}
+	return db
+}
+
 // Exec executes command within one database
 // 实现 github.com/hodis/interface/database/db 里的 DB 接口中的方法
 func (db *DB) Exec(c redis.Connection, cmdLine [][]byte) redis.Reply {
@@ -61,6 +74,23 @@ func (db *DB) Exec(c redis.Connection, cmdLine [][]byte) redis.Reply {
 	// 实现普通命令
 	return db.execNormalCommand(cmdLine)
 }
+
+// execWithLock executes normal commands, invoker should provide locks
+func (db *DB) execWithLock(cmdline [][]byte) redis.Reply {
+	cmdName := strings.ToLower(string(cmdline[0]))
+	cmd, ok := cmdTable[cmdName]
+	if !ok {
+		return protocol.MakeErrReply("ERR unknown command '" + cmdName + "'")
+	}
+
+	if !validateArity(cmd.arity, cmdline) {
+		return protocol.MakeArgNumErrReply(cmdName)
+	}
+
+	fun := cmd.executor
+	return fun(db, cmdline[1:])
+}
+
 
 func (db *DB) execNormalCommand(cmdLine [][]byte) redis.Reply {
 	cmdName := strings.ToLower(string(cmdLine[0]))
@@ -178,7 +208,6 @@ func (db *DB) Remove(key string) {
 	timewheel.Cancel(taskKey)
 }
 
-
 // Data access
 func (db *DB) GetEntity(key string) (*database.DataEntity, bool) {
 	raw, ok := db.data.Get(key)
@@ -206,5 +235,17 @@ func (db *DB) PutIfAbsent(key string, entity *database.DataEntity) int {
 	return db.data.PutIfAbsent(key, entity)
 }
 
+func (db *DB) ForEach(cb func(key string, data *database.DataEntity, expiration *time.Time) bool) {
+	db.data.ForEach(func(key string, raw interface{}) bool {
+		entity, _ := raw.(*database.DataEntity)
+		var expiration *time.Time
+		rawExpireTime, ok := db.ttlMap.Get(key)
+		if ok {
+			expireTime, _ := rawExpireTime.(time.Time)
+			expiration = &expireTime
+		}
+		return cb(key, entity, expiration)
+	})
+}
 
 

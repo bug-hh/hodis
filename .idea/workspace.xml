@@ -1,23 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
   <component name="ChangeListManager">
     <list default="true" id="ca7db3ff-d765-494d-9330-d429c5ccb6d9" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/database/keys.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/lib/sync/wait/wait.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/redis/connection/conn.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/aof/marshal.go" beforeDir="false" afterPath="$PROJECT_DIR$/aof/marshal.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/database.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/single_db.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/single_db.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/database/string.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/string.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dump.rdb" beforeDir="false" afterPath="$PROJECT_DIR$/dump.rdb" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/interface/database/db.go" beforeDir="false" afterPath="$PROJECT_DIR$/interface/database/db.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/timewheel/timewheel.go" beforeDir="false" afterPath="$PROJECT_DIR$/lib/timewheel/timewheel.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/utils/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/lib/utils/utils.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/parser/parser.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/parser/parser.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/parser/parser_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/parser/parser_test.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/protocol/consts.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/consts.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/protocol/errors.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/errors.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/connection/conn.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/connection/conn.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/protocol/reply.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/reply.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/redis/server/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/server/server.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tcp/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/tcp/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tcp-client/tcp_client.go" beforeDir="false" afterPath="$PROJECT_DIR$/tcp-client/tcp_client.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -55,6 +55,9 @@
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
   </component>
   <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+    </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/redis" />
       <recent name="$PROJECT_DIR$/tcp" />

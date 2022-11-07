@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"github.com/hodis/interface/redis"
 	"strconv"
 )
 
@@ -91,4 +92,33 @@ func (b *BulkReply) ToBytes() []byte {
 		return nullBulkBytes
 	}
 	return []byte("$" + strconv.Itoa(len(b.Arg)) + CRLF + string(b.Arg) + CRLF)
+}
+
+func IsErrorReply(reply redis.Reply) bool {
+	return reply.ToBytes()[0] == '-'
+}
+
+/* ---- Multi Raw Reply ---- */
+
+// MultiRawReply store complex list structure, for example GeoPos command
+type MultiRawReply struct {
+	Replies []redis.Reply
+}
+
+// MakeMultiRawReply creates MultiRawReply
+func MakeMultiRawReply(replies []redis.Reply) *MultiRawReply {
+	return &MultiRawReply{
+		Replies: replies,
+	}
+}
+
+// ToBytes marshal redis.Reply
+func (r *MultiRawReply) ToBytes() []byte {
+	argLen := len(r.Replies)
+	var buf bytes.Buffer
+	buf.WriteString("*" + strconv.Itoa(argLen) + CRLF)
+	for _, arg := range r.Replies {
+		buf.Write(arg.ToBytes())
+	}
+	return buf.Bytes()
 }

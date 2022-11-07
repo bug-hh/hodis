@@ -8,6 +8,7 @@ import (
 	"github.com/hodis/interface/database"
 	"github.com/hodis/redis/protocol"
 	"strconv"
+	"time"
 )
 
 func EntityToCmd(key string, entity *database.DataEntity) *protocol.MultiBulkReply {
@@ -103,5 +104,18 @@ func zSetToCmd(key string, zset *sortedset.SortedSet) *protocol.MultiBulkReply {
 		i++
 		return true
 	})
+	return protocol.MakeMultiBulkReply(args)
+}
+
+//PX milliseconds – 设置键key的过期时间，单位时毫秒
+var pExpireAtBytes = []byte("PEXPIREAT")
+
+// MakeExpireCmd generates command line to set expiration for the given key
+func MakeExpireCmd(key string, expireAt time.Time) *protocol.MultiBulkReply {
+	args := make([][]byte, 3)
+	args[0] = pExpireAtBytes
+	args[1] = []byte(key)
+	// 纳秒，微秒，毫秒，秒
+	args[2] = []byte(strconv.FormatInt(expireAt.UnixNano()/1e6, 10))
 	return protocol.MakeMultiBulkReply(args)
 }

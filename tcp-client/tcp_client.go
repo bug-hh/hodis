@@ -16,6 +16,7 @@ const (
 	FLAG_NUMBER = ":"
 	FLAG_SIMPLE_STRING = "+"
 	FLAG_ERROR = "-"
+	CLIENT_DISPLAY = "127.0.0.1:6399> "
 )
 
 func toByte(s string) byte {
@@ -97,7 +98,11 @@ func main() {
 	defer conn.Close() // 关闭TCP连接
 	inputReader := bufio.NewReader(os.Stdin)
 	for {
+		fmt.Printf(CLIENT_DISPLAY)
 		input, _ := inputReader.ReadString('\n') // 读取用户输入
+		if input == "\n" {
+			continue
+		}
 
 		if strings.ToUpper(strings.TrimSpace(input)) == "QUIT" { // 如果输入 quit 就退出
 			return

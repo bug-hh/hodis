@@ -53,7 +53,6 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 	h.activeConn.Store(client, 1)
 	logger.Info("开始解析 stream")
 	ch := parser.ParseStream(conn)
-	logger.Info("解析完成")
 	for payload := range ch {
 		if payload.Err != nil {
 			// 如果遇到的是 EOF 错误，那么就关闭客户端连接

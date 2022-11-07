@@ -1,8 +1,10 @@
 package database
 
 import (
+	"github.com/hodis/aof"
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
+	"github.com/hodis/lib/utils"
 	"github.com/hodis/redis/protocol"
 	"strconv"
 	"strings"
@@ -87,6 +89,7 @@ func execSet(db *DB, args [][]byte) redis.Reply {
 				if ttlArg <= 0 {
 					protocol.MakeErrReply("ERR invalid expire time in set")
 				}
+				// 转换成毫秒
 				ttl = ttlArg * 1000
 				i++
 			} else if arg == "PX" {
@@ -127,15 +130,26 @@ func execSet(db *DB, args [][]byte) redis.Reply {
 	}
 
 	if result > 0 {
+		// 这个 key 是有设置过期时间的
+		/*
+		这里做 aof 写入时，对于 set key value EX seconds 这种指定了过期时间的命令，用下面两条命令进行改写
+		set key value
+		pexpireat key 毫秒时间戳
+		 */
 		if ttl != unlimitedTTL {
+			// 根据过期时长，算出过期时间
 			expireTime := time.Now().Add(time.Duration(ttl) * time.Millisecond)
+			// 给 key 设置过期时间
 			db.Expire(key, expireTime)
-			// todo 以后实现 aof
-
-
+			db.addAof(CmdLine{
+				[]byte("SET"),
+				args[0],
+				args[1],
+			})
+			db.addAof(aof.MakeExpireCmd(key, expireTime).Args)
 		} else {
 			db.Persist(key)
-			// todo 以后实现 aof
+			db.addAof(utils.ToCmdLine3("set", args...))
 		}
 	}
 	if result > 0 {
