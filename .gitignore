@@ -16,3 +16,6 @@
 
 # logs
 logs/
+
+# redis cluster test
+redis-cluster-test/

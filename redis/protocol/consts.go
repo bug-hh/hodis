@@ -1,5 +1,15 @@
 package protocol
 
+type PongReply struct {
+
+}
+
+var pongBytes = []byte("+PONG\r\n")
+
+func (r *PongReply) ToBytes() []byte {
+	return pongBytes
+}
+
 var emptyMultiBulkBytes = []byte("*0\r\n")
 
 type EmptyMultiBulkReply struct {

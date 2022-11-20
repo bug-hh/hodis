@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/hodis/lib/logger"
+	"github.com/hodis/redis/client"
 	"net"
 	"os"
 	"strings"
@@ -16,7 +18,7 @@ const (
 	FLAG_NUMBER = ":"
 	FLAG_SIMPLE_STRING = "+"
 	FLAG_ERROR = "-"
-	CLIENT_DISPLAY = "127.0.0.1:6399> "
+	CLIENT_DISPLAY = "127.0.0.1:30000> "
 )
 
 func toByte(s string) byte {
@@ -44,12 +46,24 @@ func handleCMD(s string) []byte {
 	return bs.Bytes()
 }
 
-func handleCMDTest() {
-	s := handleCMD("set world godis")
-	for _, item := range s {
-		fmt.Printf("%02x ", item)
+/*
+把用户输入的字符串命令转化为二维 byte 数组
+ */
+func handleCMD2(s string) [][]byte {
+	/*
+		先把首尾换行符去掉
+	*/
+	s = strings.TrimSpace(s)
+	// 按照空格作为分隔符分割
+	sArr := strings.Fields(s)
+	n := len(sArr)
+
+	ret := make([][]byte, 0, n)
+	for _, item := range sArr {
+		ret = append(ret, []byte(item))
 	}
-	fmt.Printf("\n")
+
+	return ret
 }
 
 func UnWrapReply(bs []byte) string {
@@ -88,9 +102,12 @@ func UnWrapReply(bs []byte) string {
 	return "reply with unsupported type"
 }
 
-// TCP 客户端
-func main() {
-	conn, err := net.Dial("tcp", "127.0.0.1:6399")
+/*
+阻塞式 redis-client
+ */
+func useClient1() {
+	addr := "127.0.0.1:6399"
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		fmt.Println("err : ", err)
 		return
@@ -111,14 +128,51 @@ func main() {
 		if err != nil {
 			return
 		}
+
 		buf := [512]byte{}
-		n, err := conn.Read(buf[:])
-		if err != nil {
-			fmt.Println("recv failed, err:", err)
+		n, readErr := conn.Read(buf[:])
+		if readErr != nil {
+			fmt.Println("recv failed, err:", readErr)
 			return
 		}
 		fmt.Println(UnWrapReply(buf[:n]))
 	}
+}
+
+// 使用非阻塞式 tcp client，pipeline 模式的 redis-client
+// 这种在服务端未响应时客户端继续向服务端发送请求的模式称为 Pipeline 模式
+func useClient2() {
+	addr := "127.0.0.1:30000"
+	inputReader := bufio.NewReader(os.Stdin)
+	redisClient, err := client.MakeClient(addr)
+	redisClient.Start()
+	if err != nil {
+		logger.Error("err : ", err)
+		return
+	}
+	for {
+		fmt.Printf(CLIENT_DISPLAY)
+		input, _ := inputReader.ReadString('\n') // 读取用户输入
+		if input == "\n" {
+			continue
+		}
+
+		if strings.ToUpper(strings.TrimSpace(input)) == "QUIT" { // 如果输入 quit 就退出
+			return
+		}
+		result := redisClient.Send(handleCMD2(input))
+		if result != nil {
+			fmt.Println(UnWrapReply(result.ToBytes()))
+		} else {
+			fmt.Println("result is nil")
+		}
+
+	}
+}
+
+// TCP 客户端
+func main() {
+	useClient2()
 }
 
 

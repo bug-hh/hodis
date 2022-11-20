@@ -73,7 +73,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 				ch <- &Payload{
 					Err: err,
 				}
-				logger.Info("发生 io err")
+				logger.Info("发生 io err", err)
 				close(ch)
 				return
 			}

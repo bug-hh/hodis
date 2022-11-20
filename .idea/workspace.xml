@@ -5,17 +5,24 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ca7db3ff-d765-494d-9330-d429c5ccb6d9" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/cluster/client_pool.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cluster/com.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cluster/router.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/cluster/utils.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/database/sys.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/lib/consistenthash/consistenthash.go" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/redis/client/client_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/aof/marshal.go" beforeDir="false" afterPath="$PROJECT_DIR$/aof/marshal.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/database.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/single_db.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/single_db.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/string.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/string.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/database/tx_utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/tx_utils.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/datastruct/sortedset/skiplist.go" beforeDir="false" afterPath="$PROJECT_DIR$/datastruct/sortedset/skiplist.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/datastruct/sortedset/sortedset.go" beforeDir="false" afterPath="$PROJECT_DIR$/datastruct/sortedset/sortedset.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/dump.rdb" beforeDir="false" afterPath="$PROJECT_DIR$/dump.rdb" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/interface/database/db.go" beforeDir="false" afterPath="$PROJECT_DIR$/interface/database/db.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/utils/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/lib/utils/utils.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis.aof" beforeDir="false" afterPath="$PROJECT_DIR$/hodis.aof" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/connection/conn.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/connection/conn.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/protocol/reply.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/reply.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/parser/parser.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/parser/parser.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/protocol/consts.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/consts.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/redis/server/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/server/server.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tcp-client/tcp_client.go" beforeDir="false" afterPath="$PROJECT_DIR$/tcp-client/tcp_client.go" afterDir="false" />
     </list>
@@ -52,10 +59,11 @@
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.sdk.automatically.set" value="true" />
     <property name="go.tried.to.enable.integration.vgo.integrator" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/redis/client" />
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/redis/client" />
       <recent name="$PROJECT_DIR$" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
@@ -64,7 +72,16 @@
       <recent name="$PROJECT_DIR$/redis/server" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Build.go build github.com/hodis/script">
+  <component name="RunManager" selected="Go Build.go build github.com/hodis">
+    <configuration name="go build github.com/hodis" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="hodis" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <filePath value="$PROJECT_DIR$/main.go" />
+      <package value="github.com/hodis" />
+      <directory value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
     <configuration name="go build github.com/hodis/script" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
       <module name="hodis" />
       <working_directory value="$PROJECT_DIR$" />
@@ -72,6 +89,17 @@
       <filePath value="$PROJECT_DIR$/script/probe.go" />
       <package value="github.com/hodis/script" />
       <directory value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestClient in github.com/hodis/redis/client" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="hodis" />
+      <working_directory value="$PROJECT_DIR$/redis/client" />
+      <framework value="gotest" />
+      <kind value="PACKAGE" />
+      <package value="github.com/hodis/redis/client" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <pattern value="^\QTestClient\E$" />
       <method v="2" />
     </configuration>
     <configuration name="TestParseStream in github.com/hodis/redis/parser" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
@@ -87,6 +115,8 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Build.go build github.com/hodis" />
+        <item itemvalue="Go Test.TestClient in github.com/hodis/redis/client" />
         <item itemvalue="Go Build.go build github.com/hodis/script" />
         <item itemvalue="Go Test.TestParseStream in github.com/hodis/redis/parser" />
       </list>

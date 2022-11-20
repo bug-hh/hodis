@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"github.com/hodis/cluster"
 	"github.com/hodis/config"
 	database2 "github.com/hodis/database"
 	"github.com/hodis/interface/database"
@@ -32,6 +33,7 @@ func MakeHandler() *Handler {
 
 	if config.Properties.Self != "" && len(config.Properties.Peers) > 0 {
 		// 开启集群模式
+		db = cluster.MakeCluster()
 	} else {
 		logger.Info("开启单机模式")
 		// 开启单机模式
@@ -90,8 +92,10 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 		logger.Info("开始执行命令")
 		result := h.db.Exec(client, r.Args)
 		if result != nil {
+			logger.Info("命令执行完毕，result 不为空: ", string(result.ToBytes()))
 			_ = client.Write(result.ToBytes())
 		} else {
+			logger.Info("命令执行完毕，result 为空")
 			_ = client.Write(unknownErrReplyBytes)
 		}
 	}
