@@ -140,7 +140,9 @@ func (cluster *Cluster) Exec(c redis.Connection, cmdLine [][]byte) (result redis
 	if !ok {
 		return protocol.MakeErrReply("ERR unknown command '" + cmdName + "', or not supported in cluster mode")
 	}
-
+	if cmdName != "ping" {
+		logger.Info("cluster exec, cmdName: ", cmdName, "cmdline: ", CmdsToString(cmdLine))
+	}
 	result = cmdFunc(cluster, c, cmdLine)
 	return
 }

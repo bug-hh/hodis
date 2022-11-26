@@ -19,3 +19,6 @@ logs/
 
 # redis cluster test
 redis-cluster-test/
+
+# rdb 文件
+*.rdb

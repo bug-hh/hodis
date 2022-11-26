@@ -67,6 +67,10 @@ func MakeClient(addr string) (*Client, error) {
 	}, nil
 }
 
+func (client *Client) GetAddr() string {
+	return client.addr
+}
+
 // Send sends a request to redis server
 func (client *Client) Send(args [][]byte) redis.Reply {
 	if atomic.LoadInt32(&client.status) != running {

@@ -89,8 +89,6 @@ func (m *Map) PickNode(key string) string {
 		return m.keys[i] >= hash
 	})
 
-	logger.Info("PickNode, idx: ", idx)
-	logger.Info("PickNode, len(m.keys): ", len(m.keys))
 	// 如果当前没有任何元素 >= hash, 那么就默认返回第一个节点
 	if idx == len(m.keys) {
 		idx = 0

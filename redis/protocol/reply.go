@@ -38,6 +38,10 @@ func (r *StandardErrReply) ToBytes() []byte {
 	return []byte("-" + r.Status + CRLF)
 }
 
+func (r *StandardErrReply) Error() string {
+	return r.Status
+}
+
 type IntReply struct {
 	Code int64
 }

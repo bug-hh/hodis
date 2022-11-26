@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"github.com/hodis/interface/database"
@@ -13,7 +14,6 @@ import (
 func (cluster *Cluster) getPeerClient(peer string) (*client.Client, error) {
 	factory, ok := cluster.peerConnection[peer]
 	if !ok {
-
 		logger.Info("getPeerClient: connection factory not found, peer: ", peer)
 		return nil, errors.New("connection factory not found")
 	}
@@ -41,9 +41,20 @@ func (cluster *Cluster) returnPeerClient(peer string, peerClient *client.Client)
 	return connectionFactory.ReturnObject(context.Background(), peerClient)
 }
 
+func CmdsToString(cmdLine database.CmdLine) string {
+	bs := bytes.Buffer{}
+	for _, cl := range cmdLine {
+		bs.WriteString(string(cl))
+		bs.WriteString(" ")
+	}
+	return bs.String()
+}
+
 var defaultRelayImpl = func(cluster *Cluster, node string, c redis.Connection, cmdLine database.CmdLine) redis.Reply {
+	cmd := CmdsToString(cmdLine)
 	// 如果节点就是自己，那么就有自己来执行
 	if node == cluster.self {
+		logger.Info("自己执行: ", node, " 命令：", cmd)
 		return cluster.db.Exec(c, cmdLine)
 	}
 
@@ -54,6 +65,7 @@ var defaultRelayImpl = func(cluster *Cluster, node string, c redis.Connection, c
 	defer func() {
 		_ = cluster.returnPeerClient(node, peerClient)
 	}()
+	logger.Info("peer 执行", peerClient.GetAddr(), "命令：", cmd)
 	return peerClient.Send(cmdLine)
 }
 

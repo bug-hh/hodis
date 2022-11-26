@@ -2,6 +2,7 @@ package idgenerator
 
 import (
 	"hash/fnv"
+	"log"
 	"sync"
 	"time"
 )
@@ -42,4 +43,29 @@ func MakeGenerator(node string) *IDGenerator {
 		sequence:  1,
 		epoch:     epoch,
 	}
+}
+
+// NextID returns next unique ID
+func (w *IDGenerator) NextID() int64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	timestamp := time.Since(w.epoch).Nanoseconds() / 1000000
+	if timestamp < w.lastStamp {
+		log.Fatal("can not generate id")
+	}
+	if w.lastStamp == timestamp {
+		w.sequence = (w.sequence + 1) & maxSequence
+		if w.sequence == 0 {
+			for timestamp <= w.lastStamp {
+				timestamp = time.Since(w.epoch).Nanoseconds() / 1000000
+			}
+		}
+	} else {
+		w.sequence = 0
+	}
+	w.lastStamp = timestamp
+	id := (timestamp << timeLeft) | (w.nodeID << nodeLeft) | w.sequence
+	//fmt.Printf("%d %d %d\n", timestamp, w.sequence, id)
+	return id
 }

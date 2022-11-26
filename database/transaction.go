@@ -99,4 +99,16 @@ func isWatchingChanged(db *DB, watching map[string]uint32) bool {
 	return false
 }
 
-
+// GetRelatedKeys analysis related keys
+func GetRelatedKeys(cmdLine [][]byte) ([]string, []string) {
+	cmdName := strings.ToLower(string(cmdLine[0]))
+	cmd, ok := cmdTable[cmdName]
+	if !ok {
+		return nil, nil
+	}
+	prepare := cmd.prepare
+	if prepare == nil {
+		return nil, nil
+	}
+	return prepare(cmdLine[1:])
+}

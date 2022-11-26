@@ -158,14 +158,76 @@ func execSet(db *DB, args [][]byte) redis.Reply {
 	return &protocol.NullBulkReply{}
 }
 
+func prepareMGet(args [][]byte) ([]string, []string) {
+	keys := make([]string, len(args))
+	for i, v := range args {
+		keys[i] = string(v)
+	}
+	return nil, keys
+}
 
+func execMGet(db *DB, args [][]byte) redis.Reply {
+	keys := make([]string, len(args))
+	for i, v := range args {
+		keys[i] = string(v)
+	}
+	result := make([][]byte, len(args))
+	for i, key := range keys {
+		bytes, err := db.getAsString(key)
+		if err != nil {
+			_, isWrongType := err.(*protocol.WrongTypeErrReply)
+			if isWrongType {
+				result[i] = nil
+				continue
+			} else {
+				return err
+			}
+		}
+		result[i] = bytes
+	}
+	return protocol.MakeMultiBulkReply(result)
+}
+
+func prepareMSet(args [][]byte) ([]string, []string) {
+	size := len(args) / 2
+	keys := make([]string, size)
+	for i:=0;i<size;i++ {
+		keys[i] = string(args[2*i])
+	}
+	return keys, nil
+}
+
+func undoMSet(db *DB, args [][]byte) []database.CmdLine {
+	writeKeys, _ := prepareMSet(args)
+	return rollbackGivenKeys(db, writeKeys...)
+
+}
+func execMSet(db *DB, args [][]byte) redis.Reply {
+	if len(args) % 2 != 0 {
+		return protocol.MakeSyntaxErrReply()
+	}
+	size := len(args) / 2
+	keys := make([]string, size)
+	values := make([][]byte, size)
+
+	for i:=0;i<size;i++ {
+		keys[i] = string(args[2*i])
+		values[i] = args[2*i+1]
+	}
+	for i, key := range keys {
+		value := values[i]
+		db.PutEntity(key, &database.DataEntity{Data: value})
+	}
+	db.addAof(utils.ToCmdLine3("mset", args...))
+	return &protocol.OkReply{}
+}
 
 
 func init() {
 	RegisterCommand("Get", execGet, readFirstKey, nil, 2, flagReadOnly)
 	RegisterCommand("Set", execSet, writeFirstKey, rollbackFirstKey, -3, flagWrite)
 
-
-
+	RegisterCommand("MGet", execMGet, prepareMGet, nil, -2, flagReadOnly)
+	RegisterCommand("MSet", execMSet, prepareMSet, undoMSet, -3, flagWrite)
 
 }

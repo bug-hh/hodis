@@ -70,7 +70,6 @@ func makeBasicDB() *DB {
 // 实现 github.com/hodis/interface/database/db 里的 DB 接口中的方法
 func (db *DB) Exec(c redis.Connection, cmdLine [][]byte) redis.Reply {
 	//  todo 以后实现 无法在事务中执行的特殊命令
-
 	// 实现普通命令
 	return db.execNormalCommand(cmdLine)
 }

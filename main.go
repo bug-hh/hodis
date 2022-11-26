@@ -19,7 +19,7 @@ var banner = `
 
 var defaultProperties = &config.ServerProperties{
 	Bind:           "0.0.0.0",
-	Port:           6399,
+	Port:           30000,
 	AppendOnly:     false,
 	AppendFilename: "hodis.aof",
 	MaxClients:     1000,

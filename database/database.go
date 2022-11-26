@@ -141,7 +141,10 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	}()
 
 	cmdName := strings.ToLower(string(cmdLine[0]))
-	logger.Info("MultiDB cmdName: ", cmdName)
+	if cmdName != "ping" {
+		logger.Info("MultiDB cmdName: ", cmdName)
+	}
+
 	// todo 之后实现 authenticate
 	if cmdName == "auth" {
 
