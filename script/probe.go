@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"github.com/hodis/redis/parser"
@@ -38,14 +37,19 @@ func handleCMD(s string) []byte {
 }
 
 func main() {
-	bs := bytes.Buffer{}
-	input := "set key value"
+	bs := []byte{
+		42, 52, 13, 10, 43, 79, 75, 13, 10,
+		43, 79, 75, 13, 10, 42, 49, 13, 10,
+		36, 49, 13, 10, 118, 13, 10, 42, 51,
+		13, 10, 36, 49, 13, 10, 49, 13, 10,
+		36, 49, 13, 10, 50, 13, 10, 36, 49,
+		13, 10, 51, 13, 10,
+	}
 
-	bs.Write(handleCMD(input))
-	r := bufio.NewReader(bytes.NewReader(bs.Bytes()))
+	r := bytes.NewReader(bs)
 
-	ch := make(chan *parser.Payload)
-	go parser.Parse00(r, ch)
+	ch := make(chan *parser.Payload, 100)
+	parser.Parse00(r, ch)
 	for payload := range ch {
 		if payload.Err != nil {
 			fmt.Printf("payload 发生错误: %+v\n", payload.Err)

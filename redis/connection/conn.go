@@ -131,7 +131,7 @@ func (c *Connection) SetMultiState(state bool) {
 func (c *Connection) GetQueuedCmdLine() [][][]byte {
 	return c.queue
 }
-
+// 用于事务，将事务中的命令入队
 // EnqueueCmd  enqueues command of current transaction
 func (c *Connection) EnqueueCmd(cmdLine [][]byte) {
 	c.queue = append(c.queue, cmdLine)

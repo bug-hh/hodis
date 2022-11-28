@@ -52,3 +52,21 @@ var theOkReply = new(OkReply)
 func MakeOkReply() *OkReply {
 	return theOkReply
 }
+
+// 事务相关，命令入队 reply
+// QueuedReply is +QUEUED
+type QueuedReply struct{}
+
+var queuedBytes = []byte("+QUEUED\r\n")
+
+// ToBytes marshal redis.Reply
+func (r *QueuedReply) ToBytes() []byte {
+	return queuedBytes
+}
+
+var theQueuedReply = new(QueuedReply)
+
+// MakeQueuedReply returns a QUEUED protocol
+func MakeQueuedReply() *QueuedReply {
+	return theQueuedReply
+}

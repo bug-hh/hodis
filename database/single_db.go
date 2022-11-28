@@ -5,6 +5,7 @@ import (
 	"github.com/hodis/datastruct/lock"
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
+	"github.com/hodis/lib/logger"
 	"github.com/hodis/lib/timewheel"
 	"github.com/hodis/redis/protocol"
 	"strings"
@@ -41,7 +42,6 @@ type DB struct {
 	addAof func(line CmdLine)
 }
 
-
 func MakeDB() *DB {
 	return &DB{
 		data: dict.MakeConcurrent(dataDictSize),
@@ -68,8 +68,52 @@ func makeBasicDB() *DB {
 
 // Exec executes command within one database
 // 实现 github.com/hodis/interface/database/db 里的 DB 接口中的方法
+/*
+multi
+set k v
+mset apple 1 google 2 microsoft 3
+mget k
+mget apple google microsoft
+ */
 func (db *DB) Exec(c redis.Connection, cmdLine [][]byte) redis.Reply {
+	cmdName := strings.ToLower(string(cmdLine[0]))
 	//  todo 以后实现 无法在事务中执行的特殊命令
+	// 实现 multi 事务（单机版）
+	if cmdName == "multi" {
+		if len(cmdLine) != 1 {
+			return protocol.MakeArgNumErrReply(cmdName)
+		}
+		ret := StartMulti(c)
+		logger.Info("Exec: ", string(ret.ToBytes()))
+		return ret
+	} else if cmdName == "exec" {
+		// 执行事务
+		if len(cmdLine) != 1 {
+			return protocol.MakeArgNumErrReply(cmdName)
+		}
+		return execMulti(db, c)
+	} else if cmdName == "discard" {
+		// 丢弃事务
+		if len(cmdLine) != 1 {
+			return protocol.MakeArgNumErrReply(cmdName)
+		}
+		return DiscardMulti(c)
+	} else if cmdName == "watch" {
+		/*
+			watch 命令，它可以用来监视任意数量的 key，
+			如果在 exec 命令执行时，被监视的 key 至少有一个被修改，
+			那么事务将拒绝被执行
+		*/
+		if !validateArity(-2, cmdLine) {
+			return protocol.MakeArgNumErrReply(cmdName)
+		}
+		return Watch(db, c, cmdLine[1:])
+	}
+	// 执行事务
+	if c != nil && c.InMultiState() {
+		//命令入队
+		return EnqueueCmd(c, cmdLine)
+	}
 	// 实现普通命令
 	return db.execNormalCommand(cmdLine)
 }

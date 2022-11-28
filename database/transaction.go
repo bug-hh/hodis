@@ -1,7 +1,9 @@
 package database
 
 import (
+	"fmt"
 	"github.com/hodis/interface/redis"
+	"github.com/hodis/lib/logger"
 	"github.com/hodis/redis/protocol"
 	"strings"
 )
@@ -37,12 +39,16 @@ func (db *DB) ExecMulti(conn redis.Connection, watching map[string]uint32, cmdLi
 	}
 
 	// 开始执行事务
+	logger.Info("开始执行事务")
 	results := make([]redis.Reply, 0, len(cmdLines))
 	aborted := false
 	undoCmdLines := make([][]CmdLine, 0, len(cmdLines))
 	for _, cmdLine := range cmdLines {
+		cmdName := strings.ToLower(string(cmdLine[0]))
+		logger.Info("执行: ", cmdName)
 		undoCmdLines = append(undoCmdLines, db.GetUndoLogs(cmdLine))
 		result := db.execWithLock(cmdLine)
+		logger.Info("执行结果", string(result.ToBytes()))
 		if protocol.IsErrorReply(result) {
 			aborted = true
 			// don't rollback failed commands
@@ -51,10 +57,18 @@ func (db *DB) ExecMulti(conn redis.Connection, watching map[string]uint32, cmdLi
 		}
 		results = append(results, result)
 	}
+	logger.Info("事务执行完毕，事务包含: ", len(results), "结果")
 	// 事务中所有命令都执行成功了
 	if !aborted {
 		db.addVersion(writeKeys...)
-		return protocol.MakeMultiRawReply(results)
+		ret := protocol.MakeMultiRawReply(results)
+		bs := ret.ToBytes()
+		fmt.Printf("ExecMulti: ")
+		for _, item := range bs {
+			fmt.Printf("%02d, ", item)
+		}
+		fmt.Println()
+		return ret
 	}
 
 	// undo if aborted
@@ -89,6 +103,25 @@ func (db *DB) GetUndoLogs(cmdLine [][]byte) []CmdLine {
 	return undo(db, cmdLine[1:])
 }
 
+func DiscardMulti(conn redis.Connection) redis.Reply {
+	// 如果不是在一个事务里执行 discard，就报错
+	if !conn.InMultiState() {
+		return protocol.MakeErrReply("ERR DISCARD without MULTI")
+	}
+	conn.ClearQueuedCmds()
+	conn.SetMultiState(false)
+	return protocol.MakeOkReply()
+}
+
+func Watch(db *DB, conn redis.Connection, args [][]byte) redis.Reply {
+	watching := conn.GetWatching()
+	for _, bkey := range args {
+		key := string(bkey)
+		watching[key] = db.GetVersion(key)
+	}
+	return protocol.MakeOkReply()
+}
+
 func isWatchingChanged(db *DB, watching map[string]uint32) bool {
 	for key, ver := range watching {
 		currentVersion := db.GetVersion(key)
@@ -111,4 +144,54 @@ func GetRelatedKeys(cmdLine [][]byte) ([]string, []string) {
 		return nil, nil
 	}
 	return prepare(cmdLine[1:])
+}
+
+func StartMulti(conn redis.Connection) redis.Reply {
+	if conn.InMultiState() {
+		return protocol.MakeErrReply("ERR MULTI calls can not be nested")
+	}
+	conn.SetMultiState(true)
+	return protocol.MakeOkReply()
+}
+
+func EnqueueCmd(conn redis.Connection, cmdLine [][]byte) redis.Reply {
+	cmdName := strings.ToLower(string(cmdLine[0]))
+	cmd, ok := cmdTable[cmdName]
+	if !ok {
+		err := protocol.MakeErrReply("ERR unknown command '" + cmdName + "'")
+		conn.AddTxError(err)
+		return err
+	}
+	/*
+	检查有没有 prepare 函数，prepare 函数用于给 key 加锁、构建 undo log
+	没有 prepare 函数的命令，不能用于事务
+	 */
+	if cmd.prepare == nil {
+		err := protocol.MakeErrReply("ERR command '" + cmdName + "' cannot be used in MULTI")
+		conn.AddTxError(err)
+		return err
+	}
+	/*
+	检查参数个数是否合法
+	 */
+	if !validateArity(cmd.arity, cmdLine) {
+		err := protocol.MakeArgNumErrReply(cmdName)
+		conn.AddTxError(err)
+		return err
+	}
+
+	conn.EnqueueCmd(cmdLine)
+	return protocol.MakeQueuedReply()
+}
+
+func execMulti(db *DB, conn redis.Connection) redis.Reply {
+	if !conn.InMultiState() {
+		return protocol.MakeErrReply("ERR EXEC without MULTI")
+	}
+	defer conn.SetMultiState(false)
+	if len(conn.GetTxErrors()) > 0 {
+		return protocol.MakeErrReply("EXECABORT Transaction discarded because of previous errors.")
+	}
+	cmdLines := conn.GetQueuedCmdLine()
+	return db.ExecMulti(conn, conn.GetWatching(), cmdLines)
 }

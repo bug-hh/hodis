@@ -5,24 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ca7db3ff-d765-494d-9330-d429c5ccb6d9" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cluster/cluster.go" beforeDir="false" afterPath="$PROJECT_DIR$/cluster/cluster.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cluster/com.go" beforeDir="false" afterPath="$PROJECT_DIR$/cluster/com.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cluster/router.go" beforeDir="false" afterPath="$PROJECT_DIR$/cluster/router.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/cluster/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/cluster/utils.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/database.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/single_db.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/single_db.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/string.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/string.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/transaction.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/transaction.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/tx_utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/tx_utils.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/consistenthash/consistenthash.go" beforeDir="false" afterPath="$PROJECT_DIR$/lib/consistenthash/consistenthash.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/idgenerator/snowflake.go" beforeDir="false" afterPath="$PROJECT_DIR$/lib/idgenerator/snowflake.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/utils/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/lib/utils/utils.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/client/client.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/client/client.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/protocol/reply.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/reply.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/server/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/server/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dump.rdb" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/connection/conn.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/connection/conn.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/protocol/consts.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/consts.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/script/probe.go" beforeDir="false" afterPath="$PROJECT_DIR$/script/probe.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -70,7 +59,7 @@
       <recent name="$PROJECT_DIR$/redis/server" />
     </key>
   </component>
-  <component name="RunManager" selected="Go Build.go build github.com/hodis">
+  <component name="RunManager" selected="Go Build.go build github.com/hodis/tcp-client">
     <configuration name="go build github.com/hodis" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
       <module name="hodis" />
       <working_directory value="$PROJECT_DIR$" />
@@ -86,6 +75,15 @@
       <kind value="PACKAGE" />
       <filePath value="$PROJECT_DIR$/script/probe.go" />
       <package value="github.com/hodis/script" />
+      <directory value="$PROJECT_DIR$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build github.com/hodis/tcp-client" type="GoApplicationRunConfiguration" factoryName="Go Application" temporary="true" nameIsGenerated="true">
+      <module name="hodis" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <filePath value="$PROJECT_DIR$/tcp-client/tcp_client.go" />
+      <package value="github.com/hodis/tcp-client" />
       <directory value="$PROJECT_DIR$" />
       <method v="2" />
     </configuration>
@@ -113,9 +111,10 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Go Build.go build github.com/hodis/tcp-client" />
+        <item itemvalue="Go Build.go build github.com/hodis/script" />
         <item itemvalue="Go Build.go build github.com/hodis" />
         <item itemvalue="Go Test.TestClient in github.com/hodis/redis/client" />
-        <item itemvalue="Go Build.go build github.com/hodis/script" />
         <item itemvalue="Go Test.TestParseStream in github.com/hodis/redis/parser" />
       </list>
     </recent_temporary>
@@ -138,5 +137,12 @@
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>
+  </component>
+  <component name="XDebuggerManager">
+    <watches-manager>
+      <configuration name="GoApplicationRunConfiguration">
+        <watch expression="bs[i]" language="go" />
+      </configuration>
+    </watches-manager>
   </component>
 </project>
