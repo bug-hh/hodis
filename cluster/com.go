@@ -12,6 +12,7 @@ import (
 )
 
 func (cluster *Cluster) getPeerClient(peer string) (*client.Client, error) {
+	logger.Info("getPeerClient: ", cluster.peerConnection)
 	factory, ok := cluster.peerConnection[peer]
 	if !ok {
 		logger.Info("getPeerClient: connection factory not found, peer: ", peer)
@@ -65,6 +66,12 @@ var defaultRelayImpl = func(cluster *Cluster, node string, c redis.Connection, c
 	defer func() {
 		_ = cluster.returnPeerClient(node, peerClient)
 	}()
+
+	/* todo 考虑 move 命令实现，代码执行到这，代表不是由本节点执行命令，而是其他节点执行，这里参考 redis的实现，
+	// 返回 moved 错误，让 redis 客户端根据 moved 错误，重定向到对应的节点上
+	movedStr := fmt.Sprintf("MOVED %d %s", )
+	return protocol.MakeErrReply("")
+	 */
 	logger.Info("peer 执行", peerClient.GetAddr(), "命令：", cmd)
 	return peerClient.Send(cmdLine)
 }

@@ -1,9 +1,12 @@
 package cluster
 
 import (
+	"github.com/hodis/config"
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
 	"github.com/hodis/lib/logger"
+	"github.com/hodis/redis/protocol"
+	"strconv"
 )
 
 func ping(cluster *Cluster, c redis.Connection, cmdLine database.CmdLine) redis.Reply {
@@ -37,4 +40,17 @@ func makeArgs(cmd string, args ...string) [][]byte {
 		ret[i+1] = []byte(arg)
 	}
 	return ret
+}
+
+func execSelect(c redis.Connection, args [][]byte) redis.Reply {
+	dbIndex, err := strconv.Atoi(string(args[1]))
+	if err != nil {
+		return protocol.MakeErrReply("ERR invalid DB index")
+	}
+
+	if dbIndex >= config.Properties.Databases || dbIndex < 0 {
+		return protocol.MakeErrReply("ERR DB index is out of range")
+	}
+	c.SelectDB(dbIndex)
+	return protocol.MakeOkReply()
 }

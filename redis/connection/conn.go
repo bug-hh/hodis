@@ -133,6 +133,7 @@ func (c *Connection) GetQueuedCmdLine() [][][]byte {
 }
 // 用于事务，将事务中的命令入队
 // EnqueueCmd  enqueues command of current transaction
+// 一个二维数组，代表一条命令
 func (c *Connection) EnqueueCmd(cmdLine [][]byte) {
 	c.queue = append(c.queue, cmdLine)
 }

@@ -118,14 +118,25 @@ func (cluster *Cluster) Exec(c redis.Connection, cmdLine [][]byte) (result redis
 		if len(cmdLine) != 1 {
 			return protocol.MakeArgNumErrReply(cmdName)
 		}
-
-
+		return database2.StartMulti(c)
 	} else if cmdName == "discard" {
+		if len(cmdLine) != 1 {
+			return protocol.MakeArgNumErrReply(cmdName)
+		}
+		return database2.DiscardMulti(c)
 
 	} else if cmdName == "exec" {
-
+		if len(cmdLine) != 1 {
+			return protocol.MakeArgNumErrReply(cmdName)
+		}
+		//实际测试来看，redis 不支持在一个事务中横跨多个节点执行，会报错
+		// 所有命令存在 redis.Connection 队列里，所以这里传 nil
+		return execMulti(cluster, c, nil)
 	} else if cmdName == "select" {
-
+		if len(cmdLine) != 2 {
+			return protocol.MakeArgNumErrReply(cmdName)
+		}
+		execSelect(c, cmdLine)
 	} else if cmdName == "cluster" {
 		/*
 		原作者并没有实现 cluster nodes，，cluster info，cluster meet 这种命令
@@ -136,6 +147,21 @@ func (cluster *Cluster) Exec(c redis.Connection, cmdLine [][]byte) (result redis
 		return cluster.getClusterInfo(c, cmdLine)
 	}
 
+	/*
+	按照 redis 的实现，如果已经开启事务，但是输入的 key 不在本节点上，那么当前事务会失效，事务内的命令会被清空，
+	同时重定向到 key 对应的节点，执行命令
+	按照 redis 的实现，如果在一个事务中，所有相关的 key 不在同一个 slot 内，会报错：(error) CROSSSLOT Keys in request don't hash to the same slot
+	解决方法是，用 hast tag 让 多个key 分配同一个 slot 中
+	*/
+	if c != nil && c.InMultiState() {
+		judgeReply, canEnqueue := cluster.JudgeKey(c, cmdLine)
+		if canEnqueue {
+			return database2.EnqueueCmd(c, cmdLine)
+		} else {
+			return judgeReply
+		}
+	}
+
 	cmdFunc, ok := router[cmdName]
 	if !ok {
 		return protocol.MakeErrReply("ERR unknown command '" + cmdName + "', or not supported in cluster mode")
@@ -144,6 +170,53 @@ func (cluster *Cluster) Exec(c redis.Connection, cmdLine [][]byte) (result redis
 		logger.Info("cluster exec, cmdName: ", cmdName, "cmdline: ", CmdsToString(cmdLine))
 	}
 	result = cmdFunc(cluster, c, cmdLine)
+	return
+}
+
+/*
+判断传入的 key 是否保证自身节点内
+ */
+func (cluster *Cluster) JudgeKey(conn redis.Connection, cmdLine [][]byte) (result redis.Reply, canEnqueue bool) {
+	// cmdLine[0] 是命令本身，cmdLine[1] 才是 key
+	// 没有 key，那么就是在本地执行
+	if len(cmdLine) < 2 {
+		result = protocol.MakeOkReply()
+		canEnqueue = true
+		return
+	}
+	wKeys, rKeys := database2.GetRelatedKeys(cmdLine)
+	var keys []string
+	keys = append(keys, wKeys...)
+	keys = append(keys, rKeys...)
+
+	logger.Info("JudgeKey keys: ", keys)
+	groupMap := cluster.groupBy(keys)
+
+	if len(groupMap) > 1 {
+		result = protocol.MakeErrReply("transaction require all keys must be on the same node")
+		canEnqueue = false
+		return
+	}
+
+	logger.Info("JudgeKey groupMap", groupMap)
+	var peer string
+	for p := range groupMap {
+		peer = p
+	}
+
+	if peer != cluster.self {
+		// 清空事务队列中的命令，重定向到 peer 节点，执行当前命令
+		logger.Info("JudgeKey, peer: ", peer)
+		conn.ClearQueuedCmds()
+		conn.SetMultiState(false)
+		result = cluster.relay(peer, conn, cmdLine)
+		canEnqueue = false
+		return
+	}
+
+	// 代码执行到这，代表当前命令使用的 key 也在本节点上，可入队
+	result = protocol.MakeOkReply()
+	canEnqueue = true
 	return
 }
 
