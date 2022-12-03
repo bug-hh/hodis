@@ -26,6 +26,11 @@ func makeRouter() map[string]CmdFunc {
 	routerMap["zrange"] = defaultFunc
 	routerMap["zrem"] = defaultFunc
 
+	routerMap["lpush"] = defaultFunc
+	routerMap["rpush"] = defaultFunc
+	routerMap["lrange"] = defaultFunc
+	routerMap["rpop"] = defaultFunc
+
 	return routerMap
 }
 
