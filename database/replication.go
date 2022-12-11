@@ -356,7 +356,6 @@ func (mdb *MultiDB) doPsync() error {
 	if err != nil {
 		return errors.New("dump rdb failed: " + err.Error())
 	}
-
 	mdb.replication.mutex.Lock()
 	defer mdb.replication.mutex.Unlock()
 
@@ -381,13 +380,14 @@ func (mdb *MultiDB) doPsync() error {
 	}
 
 	// there is no CRLF between RDB and following AOF, reset stream to avoid parser error
-	mdb.replication.masterChan = parser.ParseStream(mdb.replication.masterConn)
+	//mdb.replication.masterChan = parser.ParseStream(mdb.replication.masterConn)
 	// fixme: update aof file
 	return nil
 }
 
 // 主从模式，命令传播，slave 从 master 那获取写命令，然后在本地执行
 func (mdb *MultiDB) receiveAOF() error {
+	logger.Info("receiveAOF, addr: ", mdb.replication.masterConn.RemoteAddr())
 	conn := connection.NewConn(mdb.replication.masterConn)
 	conn.SetRole(connection.ReplicationRecvCli)
 	mdb.replication.mutex.Lock()
@@ -400,19 +400,20 @@ func (mdb *MultiDB) receiveAOF() error {
 
 	mdb.replication.running.Add(1)
 	defer mdb.replication.running.Done()
+	logger.Info("enter for")
 	for {
 		select {
-		case payload, open := <-mdb.replication.masterChan:
-			if !open {
-				return errors.New("master channel unexpected close")
-			}
+		case payload := <-mdb.replication.masterChan:
 			if payload.Err != nil {
+				logger.Info("receiveAOF, payload error, ", payload.Err)
 				return payload.Err
 			}
 			cmdLine, ok := payload.Data.(*protocol.MultiBulkReply)
 			if !ok {
+				logger.Info("unexpected payload: " + string(payload.Data.ToBytes()))
 				return errors.New("unexpected payload: " + string(payload.Data.ToBytes()))
 			}
+			logger.Info("receiveAOF payload: ", string(cmdLine.Args[0]))
 			mdb.replication.mutex.Lock()
 			if mdb.replication.modCount != modCount {
 				return nil
@@ -425,6 +426,7 @@ func (mdb *MultiDB) receiveAOF() error {
 				n, mdb.replication.replOffset))
 			mdb.replication.mutex.Unlock()
 		case <-done:
+			logger.Info("receiveAOF done")
 			return nil
 		}
 	}

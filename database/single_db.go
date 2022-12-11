@@ -40,6 +40,7 @@ type DB struct {
 
 	locker *lock.Locks
 	addAof func(line CmdLine)
+	cmdSync func(line CmdLine) error
 }
 
 func MakeDB() *DB {

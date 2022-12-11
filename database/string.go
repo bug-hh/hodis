@@ -4,6 +4,7 @@ import (
 	"github.com/hodis/aof"
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
+	"github.com/hodis/lib/logger"
 	"github.com/hodis/lib/utils"
 	"github.com/hodis/redis/protocol"
 	"strconv"
@@ -87,7 +88,7 @@ func execSet(db *DB, args [][]byte) redis.Reply {
 				}
 
 				if ttlArg <= 0 {
-					protocol.MakeErrReply("ERR invalid expire time in set")
+					return protocol.MakeErrReply("ERR invalid expire time in set")
 				}
 				// 转换成毫秒
 				ttl = ttlArg * 1000
@@ -104,7 +105,7 @@ func execSet(db *DB, args [][]byte) redis.Reply {
 					return &protocol.SyntaxErrReply{}
 				}
 				if ttlArg <= 0 {
-					protocol.MakeErrReply("ERR invalid expire time in set")
+					return protocol.MakeErrReply("ERR invalid expire time in set")
 				}
 				ttl = ttlArg
 				i++
@@ -152,6 +153,16 @@ func execSet(db *DB, args [][]byte) redis.Reply {
 			db.addAof(utils.ToCmdLine3("set", args...))
 		}
 	}
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		logger.Info("set sync")
+		syncErr := db.cmdSync(utils.ToCmdLine3("set", args...))
+		if syncErr != nil {
+			logger.Warn("sync command to slave failed: ", syncErr)
+		}
+	}
+
 	if result > 0 {
 		return &protocol.OkReply{}
 	}
@@ -219,6 +230,14 @@ func execMSet(db *DB, args [][]byte) redis.Reply {
 		db.PutEntity(key, &database.DataEntity{Data: value})
 	}
 	db.addAof(utils.ToCmdLine3("mset", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("mset", args...))
+		if syncErr != nil {
+			logger.Warn("sync mset to slave failed: ", syncErr)
+		}
+	}
 	return &protocol.OkReply{}
 }
 

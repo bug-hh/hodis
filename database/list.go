@@ -4,6 +4,7 @@ import (
 	"github.com/hodis/datastruct/list"
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
+	"github.com/hodis/lib/logger"
 	"github.com/hodis/lib/utils"
 	"github.com/hodis/redis/protocol"
 	"strconv"
@@ -48,6 +49,14 @@ func execLPush(db *DB, args [][]byte) redis.Reply {
 		retList.Insert(0, value)
 	}
 	db.addAof(utils.ToCmdLine3("lpush", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("lpush", args...))
+		if syncErr != nil {
+			logger.Warn("sync lpush to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeIntReply(int64(retList.Len()))
 }
 
@@ -133,6 +142,14 @@ func execRPop(db *DB, args [][]byte) redis.Reply {
 		db.Remove(key)
 	}
 	db.addAof(utils.ToCmdLine3("rpop", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("rpop", args...))
+		if syncErr != nil {
+			logger.Warn("sync rpop to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeBulkReply(val)
 }
 
@@ -174,6 +191,14 @@ func execRPush(db *DB, args [][]byte) redis.Reply {
 	}
 
 	db.addAof(utils.ToCmdLine3("rpush", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("rpush", args...))
+		if syncErr != nil {
+			logger.Warn("sync rpush to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeIntReply(int64(retList.Len()))
 }
 

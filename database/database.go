@@ -90,6 +90,7 @@ func NewStandaloneServer() *MultiDB {
 	mdb.startReplCron()
 	// 初始化时，默认自己是 master
 	mdb.role = masterRole
+
 	return mdb
 }
 
@@ -176,6 +177,27 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		ls := strings.Split(slaveClient.RemoteAddr().String(), ":")
 		key := strings.ToLower(string(cmdLine[1]))
 		if key == "listening-port" {
+			// 在收到来自 slave 的 ack 后，初始化用于命令传播的回调函数
+			for _, db := range mdb.dbSet {
+				singleDB := db.Load().(*DB)
+				// 用于主从模式下的命令传播
+				singleDB.cmdSync = func(line CmdLine) (ret error) {
+					logger.Info("xxx sync")
+					// 只有自己是 master，才有资格向 slave 传播写命令
+					if atomic.LoadInt32(&mdb.role) == masterRole {
+						keyCommand := string(line[0])
+						logger.Info("command sync key: ", keyCommand)
+						cc, _ := c.(*connection.Connection)
+						logger.Info("cmdSync, addr: ", cc.RemoteAddr())
+						syncReq := protocol.MakeMultiBulkReply(line)
+						ret = c.Write(syncReq.ToBytes())
+						if ret != nil {
+							logger.Info("command sync failed: ", ret.Error())
+						}
+					}
+					return ret
+				}
+			}
 			port := string(cmdLine[2])
 			sn := &slaveNode{
 				slaveIp:   strings.TrimSpace(ls[0]),
@@ -209,7 +231,7 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		}
 	}
 
-	// slaveof ip port
+	// slaveof ip port, 当前节点进入 slave 模式，slave 模式下，不容许 slave 节点执行来自客户端的 set 操作
 	if cmdName == "slaveof" {
 		if c != nil && c.InMultiState() {
 			return protocol.MakeErrReply("cannot use slave of database within multi")
@@ -229,7 +251,12 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	} else if cmdName == "bgsave" {
 		return BGSaveRDB(mdb)
 	}
-
+	// 如果本节点时 slave 节点，那么不允许 slave 接受来自客户端的写操作（擅自进行写操作，应该由 master 节点进行同步）
+	// 这里统一拦截掉
+	cc := c.(*connection.Connection)
+	if !CanExecWriteCmd(mdb, cc, cmdName) {
+		return protocol.MakeErrReply("READONLY You can't write against a read only replica.")
+	}
 	// 常规命令
 	dbIndex := c.GetDBIndex()
 	selectDB, errReply := mdb.selectDB(dbIndex)
@@ -240,6 +267,15 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	return selectDB.Exec(c, cmdLine)
 }
 
+func CanExecWriteCmd(db *MultiDB, conn *connection.Connection, cmdName string) bool {
+	writeCmds := []string{
+		"set", "mset", "lpush", "rpush", "lpop", "rpop", "zadd", "zrem",
+	}
+	for _, cmd := range writeCmds {
+		return !(cmdName == cmd && atomic.LoadInt32(&db.role) == slaveRole && conn.GetRole() != connection.ReplicationRecvCli)
+	}
+	return true
+}
 func SaveAndSendRDB(db *MultiDB, conn redis.Connection) {
 	BGSaveRDB(db)
 	err := sendRDBFile(conn)

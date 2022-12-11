@@ -82,6 +82,14 @@ func execZAdd(db *DB, args [][]byte) redis.Reply {
 	logger.Debug("add score: ", sortedSet.GetSkipList().GetHeader().GetLevel()[0].GetForward().Score)
 
 	db.addAof(utils.ToCmdLine3("zadd", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("zadd", args...))
+		if syncErr != nil {
+			logger.Warn("sync zadd to slave failed: ", syncErr)
+		}
+	}
 
 	return protocol.MakeIntReply(int64(i))
 }
@@ -141,6 +149,14 @@ func execZRem(db *DB, args [][]byte) redis.Reply {
 
 	if deleted > 0 {
 		db.addAof(utils.ToCmdLine3("zrem", args...))
+		// 如果是主从模式，master 将 set 命令发送给 slave
+		// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+		if db.cmdSync != nil {
+			syncErr := db.cmdSync(utils.ToCmdLine3("zrem", args...))
+			if syncErr != nil {
+				logger.Warn("sync zrem to slave failed: ", syncErr)
+			}
+		}
 	}
 	return protocol.MakeIntReply(deleted)
 }
@@ -163,33 +179,21 @@ func range0(db *DB, key string, start int64, stop int64, withScores bool, desc b
 	} else if start >= size {
 		return &protocol.EmptyMultiBulkReply{}
 	}
-	logger.Debug("XXXXX stop: ", stop)
 	if stop < -1 * size {
-		logger.Debug("stop < -1 * size")
 		stop = 0
-		logger.Debug("stop: ", stop)
 	} else if stop < 0 {
-		logger.Debug("stop < 0 ")
 		stop = size + stop+1
-		logger.Debug("stop: ", stop)
 	} else if stop < size {
-		logger.Debug("stop < size")
 		stop++
-		logger.Debug("stop: ", stop)
 	} else {
 		stop = size
-		logger.Debug("stop: ", stop)
+
 	}
 	if stop < start {
 		stop = start
 	}
-	logger.Debug("size: ", size)
-	logger.Debug("start: ", start)
-	logger.Debug("stop: ", stop)
+
 	slice := sortedSet.Range(start, stop, desc)
-	logger.Debug("len slice: ", len(slice))
-	logger.Debug("slice: ", slice)
-	logger.Debug("sortedSet Len: ", sortedSet.Len())
 	if withScores {
 		result := make([][]byte, len(slice)*2)
 		i := 0
@@ -236,5 +240,4 @@ func init() {
 	RegisterCommand("ZAdd", execZAdd, writeFirstKey, undoZAdd, -4, flagWrite)
 	RegisterCommand("ZRange", execZRange, readFirstKey, nil, -4, flagReadOnly)
 	RegisterCommand("ZRem", execZRem, writeFirstKey, undoZRem, -3, flagWrite)
-
 }
