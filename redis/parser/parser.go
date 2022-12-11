@@ -31,6 +31,8 @@ func ParseStream(reader io.Reader) <-chan *Payload {
 		数组, 以 * 开头
 		以是否「二进制安全」可以把上述五类划分成两类，那么「简单字符串」「错误信息」「整数」非二进制安全，其余二进制安全
 		二进制安全是指允许协议中出现任意字符而不会导致故障
+		// 这里添加一种私有的传输协议，这里为了兼容执行 sync 和 psync 命令时， slave 接收并解析来自 master 的 rdb 文件
+		二进制文件，以 # 开头
 	*/
 	ch := make(chan *Payload)
 	go parse0(reader, ch)
@@ -105,7 +107,7 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 					state = readState{}
 					continue
 				}
-			} else if msg[0] == '$' {
+			} else if msg[0] == '$' || msg[0] == '#' {
 				// 字符串
 				// 更新 state 里的字段
 				err = parseBulkHeader(msg, &state)
@@ -151,6 +153,8 @@ func parse0(reader io.Reader, ch chan<- *Payload) {
 					result = protocol.MakeMultiBulkReply(state.args)
 				} else if state.msgType == '$' {
 					result = protocol.MakeMultiBulkReply(state.args)
+				} else if state.msgType == '#' {
+					result = protocol.MakeRDBFileReply(state.args[0])
 				}
 				ch <- &Payload{
 					Data: result,
@@ -237,6 +241,8 @@ func parseMultiBulkHeader(msg []byte, state *readState) error {
 func readLine(bufReader *bufio.Reader, state *readState) ([]byte, bool, error) {
 	var msg []byte
 	var err error
+	// 按照 rdb 文件的格式，rdb 文件前 5 个字节是固定字符串 REDIS
+
 	// 读取非二进制安全数据，也有可能是二进制安全数据，这是一个初始状态
 	if state.bulkLen == 0 {
 		msg, err = bufReader.ReadBytes('\n')
@@ -250,7 +256,7 @@ func readLine(bufReader *bufio.Reader, state *readState) ([]byte, bool, error) {
 		// 读取二进制安全数据
 		// 加 2 是算上了 "\r\n"
 		bulkLen := state.bulkLen + 2
-		// repl 是什么？
+		// repl 做主从复制，-2 是去掉最后的 CRLF
 		if state.readingRepl {
 			bulkLen -= 2
 		}

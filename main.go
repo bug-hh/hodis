@@ -56,7 +56,9 @@ func main() {
 		// 要是什么都没有，就用默认配置
 		config.Properties = defaultProperties
 	} else {
+		logger.Info("setup config, configFileName: ", configFilename)
 		config.SetupConfig(configFilename)
+		logger.Info("config: ", config.Properties)
 
 	}
 

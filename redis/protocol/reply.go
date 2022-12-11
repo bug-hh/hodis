@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bytes"
+	"encoding/base64"
 	"github.com/hodis/interface/redis"
 	"strconv"
 )
@@ -81,6 +82,7 @@ func (r *MultiBulkReply) ToBytes() []byte {
 	return buf.Bytes()
 }
 
+
 type BulkReply struct {
 	Arg []byte
 }
@@ -96,6 +98,30 @@ func (b *BulkReply) ToBytes() []byte {
 		return nullBulkBytes
 	}
 	return []byte("$" + strconv.Itoa(len(b.Arg)) + CRLF + string(b.Arg) + CRLF)
+}
+
+type RDBFileReply struct {
+	Arg []byte
+}
+
+func MakeRDBFileReply(arg []byte) *RDBFileReply {
+	return &RDBFileReply{
+		Arg: arg,
+	}
+}
+
+func (r *RDBFileReply) ToBytes() []byte {
+	if r.Arg == nil {
+		return nullBulkBytes
+	}
+	return []byte("#" + strconv.Itoa(len(r.Arg)) + CRLF + string(r.Arg) + CRLF)
+}
+
+func (r *RDBFileReply) ToRDBFileBytes() ([]byte, error) {
+	// 需要把 base64 编码的文件内容还原
+	dbuf := make([]byte, base64.StdEncoding.DecodedLen(len(r.Arg)))
+	_, err := base64.StdEncoding.Decode(dbuf, r.Arg)
+	return dbuf, err
 }
 
 func IsErrorReply(reply redis.Reply) bool {
@@ -125,4 +151,9 @@ func (r *MultiRawReply) ToBytes() []byte {
 		buf.Write(arg.ToBytes())
 	}
 	return buf.Bytes()
+}
+
+// IsOKReply returns true if the given protocol is +OK
+func IsOKReply(reply redis.Reply) bool {
+	return string(reply.ToBytes()) == "+OK\r\n"
 }

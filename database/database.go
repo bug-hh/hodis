@@ -7,6 +7,7 @@ import (
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
 	"github.com/hodis/lib/logger"
+	"github.com/hodis/redis/connection"
 	"github.com/hodis/redis/protocol"
 	"runtime/debug"
 	"strings"
@@ -27,7 +28,11 @@ type MultiDB struct {
 	slaveOf     string
 	role int32
 	// todo 需要时再实现
-	//replication *replicationStatus
+	replication *replicationStatus
+
+	// 如果节点本身是 master 节点的话，这里存储所有 slave 节点的地址
+	// 存储的目的是为了在 info replication 命令时，显示 slave 信息
+	slaves []*slaveNode
 }
 
 func NewStandaloneServer() *MultiDB {
@@ -47,7 +52,7 @@ func NewStandaloneServer() *MultiDB {
 
 	// todo 以后实现订阅，发布功能
 
-	// todo 以后实现 aof 功能
+	// aof 功能
 	validAof := false
 	if config.Properties.AppendOnly {
 		/*
@@ -74,10 +79,17 @@ func NewStandaloneServer() *MultiDB {
 		validAof = true
 	}
 
-	// todo 以后实现 rdb 功能
-	if !validAof {}
+	// todo 以后自己 rdb 解析
+	// 按照 redis 的实现，如果开启了 aof，就不会使用 rdb
+	if config.Properties.RDBFilename != "" && !validAof {
+		loadRdbFile(mdb)
+	}
 
-	// todo 以后实现 复制 功能
+	// 主从模式复制
+	mdb.replication = initReplStatus()
+	mdb.startReplCron()
+	// 初始化时，默认自己是 master
+	mdb.role = masterRole
 	return mdb
 }
 
@@ -141,7 +153,7 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	}()
 
 	cmdName := strings.ToLower(string(cmdLine[0]))
-	if cmdName != "ping" {
+	if cmdName != "ping" && cmdName != "replconf"{
 		logger.Info("MultiDB cmdName: ", cmdName)
 	}
 
@@ -149,9 +161,64 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	if cmdName == "auth" {
 
 	}
+	// 处理来自 slave 节点发送的消息
+	if cmdName == "replconf" {
+		if len(cmdLine) != 3 {
+			return protocol.MakeArgNumErrReply("replconf")
+		}
+		if mdb.role == slaveRole {
+			return protocol.MakeErrReply("slave node cannot handle replconf command")
+		}
+		slaveClient, ok := c.(*connection.Connection)
+		if !ok {
+			return protocol.MakeErrReply("wrong connection type")
+		}
+		ls := strings.Split(slaveClient.RemoteAddr().String(), ":")
+		key := strings.ToLower(string(cmdLine[1]))
+		if key == "listening-port" {
+			port := string(cmdLine[2])
+			sn := &slaveNode{
+				slaveIp:   strings.TrimSpace(ls[0]),
+				slavePort: strings.TrimSpace(port),
+			}
+			mdb.slaves = append(mdb.slaves, sn)
+			return protocol.MakeOkReply()
+		} else if key == "ack" {
+			// 收到来自 slave 的 ack
+			// todo master 需要更新来自 slave 的 offset
+			return protocol.MakeOkReply()
+		} else {
+			return protocol.MakeErrReply("unknown command for replconf")
+		}
+	} else if cmdName == "psync" {
+		// 区分是完整重同步，还是部分重同步
+		// 完整重同步
+		if len(cmdLine) != 3 {
+			return protocol.MakeArgNumErrReply("psync")
+		}
+		if mdb.role == slaveRole {
+			return protocol.MakeErrReply("slave node cannot handle psync command")
+		}
+		// 收到来自 slave 节点的完整重同步命令
+		if string(cmdLine[1]) == "?" && string(cmdLine[2]) == "-1" {
+			go SaveAndSendRDB(mdb, c)
+			// 向 slave 节点发送 +fullsync runId offset 的回复
+			// 这里我们直接用 master 的 ip:port 地址作为 runId 来回复，这时的 offset 为 0
+			msg := fmt.Sprintf("fullsync %s:%d 0", config.Properties.Bind, config.Properties.Port)
+			return protocol.MakeStatusReply(msg)
+		}
+	}
 
-	// todo 之后实现 slave
-
+	// slaveof ip port
+	if cmdName == "slaveof" {
+		if c != nil && c.InMultiState() {
+			return protocol.MakeErrReply("cannot use slave of database within multi")
+		}
+		if len(cmdLine) != 3 {
+			return protocol.MakeArgNumErrReply("SLAVEOF")
+		}
+		return mdb.execSlaveOf(c, cmdLine[1:])
+	}
 
 	// todo 特殊命令，以后实现
 	// subscribe, publish, save, copy
@@ -159,6 +226,8 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		return BGRewriteAOF(mdb, cmdLine[1:])
 	} else if cmdName == "rewriteaof" {
 		return RewriteAOF(mdb, cmdLine[1:])
+	} else if cmdName == "bgsave" {
+		return BGSaveRDB(mdb)
 	}
 
 	// 常规命令
@@ -171,6 +240,31 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	return selectDB.Exec(c, cmdLine)
 }
 
+func SaveAndSendRDB(db *MultiDB, conn redis.Connection) {
+	BGSaveRDB(db)
+	err := sendRDBFile(conn)
+	if err != nil {
+		logger.Info("send rdb file error: ", err.Error())
+	}
+}
+
+func BGSaveRDB(db *MultiDB)	redis.Reply {
+	if db.aofHandler == nil {
+		return protocol.MakeErrReply("please enable aof before using save")
+	}
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				logger.Error(err)
+			}
+		}()
+		err := db.aofHandler.Rewrite2RDB()
+		if err != nil {
+			logger.Error(err)
+		}
+	}()
+	return protocol.MakeStatusReply("Background saving started")
+}
 
 func (mdb *MultiDB) selectDB(dbIndex int) (*DB, *protocol.StandardErrReply) {
 	if dbIndex >= len(mdb.dbSet) || dbIndex < 0 {
@@ -215,3 +309,13 @@ func RewriteAOF(db *MultiDB, args [][]byte) redis.Reply {
 	return protocol.MakeOkReply()
 }
 
+func (mdb *MultiDB) loadDB(dbIndex int, newDB *DB) redis.Reply {
+	if dbIndex >= len(mdb.dbSet) || dbIndex < 0 {
+		return protocol.MakeErrReply("ERR DB index is out of range")
+	}
+	oldDB := mdb.mustSelectDB(dbIndex)
+	newDB.index = dbIndex
+	newDB.addAof = oldDB.addAof // inherit oldDB
+	mdb.dbSet[dbIndex].Store(newDB)
+	return &protocol.OkReply{}
+}
