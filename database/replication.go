@@ -26,6 +26,10 @@ const (
 	slaveRole
 )
 
+const (
+	REPL_BUFFER_SIZE = 1024 * 1024
+)
+
 type slaveNode struct {
 	slaveIp string
 	slavePort string
@@ -53,10 +57,15 @@ type replicationStatus struct {
 	replOffset int64
 	lastRecvTime time.Time
 	running sync.WaitGroup
+
+	// 复制缓冲区
+	replBuffer [][][]byte
 }
 
 func initReplStatus() *replicationStatus {
-	repl := &replicationStatus{}
+	repl := &replicationStatus{
+		replBuffer: make([][][]byte, REPL_BUFFER_SIZE),
+	}
 	return repl
 }
 
@@ -64,7 +73,8 @@ func (repl *replicationStatus) sendAck2Master() error {
 	psyncCmdLine := utils.ToCmdLine("REPLCONF", "ACK",
 		strconv.FormatInt(repl.replOffset, 10))
 	psyncReq := protocol.MakeMultiBulkReply(psyncCmdLine)
-	_, err := repl.masterAckConn.Write(psyncReq.ToBytes())
+	_, err := repl.masterConn.Write(psyncReq.ToBytes())
+	//_, err := repl.masterAckConn.Write(psyncReq.ToBytes())
 	return err
 }
 
@@ -115,10 +125,10 @@ func (mdb *MultiDB) slaveCron() {
 	if err != nil {
 		logger.Error("send failed " + err.Error())
 	}
-	ackResp := <-repl.masterAckChan
-	if protocol.IsOKReply(ackResp.Data) {
-		repl.lastRecvTime = time.Now()
-	}
+	//ackResp := <-repl.masterAckChan
+	//if protocol.IsOKReply(ackResp.Data) {
+	//	repl.lastRecvTime = time.Now()
+	//}
 }
 
 func (mdb *MultiDB) execSlaveOf(c redis.Connection, args [][]byte) redis.Reply {
@@ -197,14 +207,14 @@ func (mdb *MultiDB) connectWithMaster() error {
 		return errors.New("connect master failed " + err.Error())
 	}
 
-	ackConn, ackErr := net.Dial("tcp", addr)
-	if ackErr != nil {
-		mdb.slaveOfNone()
-		return errors.New("Ack channel to master disconnected: " + ackErr.Error())
-	}
+	//ackConn, ackErr := net.Dial("tcp", addr)
+	//if ackErr != nil {
+	//	mdb.slaveOfNone()
+	//	return errors.New("Ack channel to master disconnected: " + ackErr.Error())
+	//}
 
 	masterChan := parser.ParseStream(conn)
-	ackChan := parser.ParseStream(ackConn)
+	//ackChan := parser.ParseStream(ackConn)
 
 	pingCmdLine := utils.ToCmdLine("ping")
 	pingReq := protocol.MakeMultiBulkReply(pingCmdLine)
@@ -294,8 +304,8 @@ func (mdb *MultiDB) connectWithMaster() error {
 	mdb.replication.masterConn = conn
 	mdb.replication.masterChan = masterChan
 
-	mdb.replication.masterAckConn = ackConn
-	mdb.replication.masterAckChan = ackChan
+	//mdb.replication.masterAckConn = ackConn
+	//mdb.replication.masterAckChan = ackChan
 
 	// 最近一次收到 master 回复的时间
 	mdb.replication.lastRecvTime = time.Now()
@@ -304,36 +314,51 @@ func (mdb *MultiDB) connectWithMaster() error {
 }
 
 func (mdb *MultiDB) doPsync() error {
-	modCount := atomic.LoadInt32(&mdb.replication.modCount)
 	// 请求主服务器进行完整重同步
 	/*
 	这里原作者没有判断到底是进行完整重同步还是部分重同步
 	直接默认使用完整重同步
 	 */
-	psyncCmdLine := utils.ToCmdLine("psync", "?", "-1")
-	psyncReq := protocol.MakeMultiBulkReply(psyncCmdLine)
-	_, err := mdb.replication.masterConn.Write(psyncReq.ToBytes())
-	if err != nil {
-		return errors.New("send failed " + err.Error())
+	// 根据 slave 的复制偏移量来判断是做完整重同步，还是部分重同步
+	if mdb.replication.replOffset > 0 && mdb.replication.replId != "" {
+		// slave 发出：需要部分重同步
+		psyncCmd := utils.ToCmdLine("psync", mdb.replication.replId, strconv.FormatInt(mdb.replication.replOffset, 64))
+		opCode, statusReply, opErr := mdb.sendAndJudgePsync(psyncCmd)
+		// 根据 master 的返回值判断是否做完整重同步
+		if opErr != nil || opCode == 0 {
+			return mdb.doFullSync(statusReply)
+		} else {
+			return mdb.doPartSync()
+		}
+	} else {
+		// 完整重同步
+		psyncCmdLine := utils.ToCmdLine("psync", "?", "-1")
+		_, statusReply, err := mdb.sendAndJudgePsync(psyncCmdLine)
+		if err != nil {
+			return err
+		}
+		return mdb.doFullSync(statusReply)
 	}
+}
 
+func (mdb *MultiDB) doPartSync() error {
+	// 开始接受来自 master 的写命令，这个命令传播很相似
+	/* 这里其实什么也不用做，因为当 slave 和 master 不同步时，
+	要么做完整重同步，要么做部分重同步
+	如果要做部分重同步时，因为主从建立连接后，会有 心跳检测，
+	心跳检测时，如果 master 发现 slave 不同步，会立刻开始同步命令给 slave，
+	不需要 slave 再额外发起请求
+	所以这里什么也不做
+	 */
+	return nil
+
+}
+
+func (mdb *MultiDB) doFullSync(reply *protocol.StatusReply) error {
+	// 完整重同步
+	modCount := atomic.LoadInt32(&mdb.replication.modCount)
+	headers := strings.Split(reply.Status, " ")
 	ch := mdb.replication.masterChan
-	psyncPayload1 := <-ch
-	if psyncPayload1.Err != nil {
-		return errors.New("read response failed: " + psyncPayload1.Err.Error())
-	}
-
-	psyncHeader, ok := psyncPayload1.Data.(*protocol.StatusReply)
-	if !ok {
-		return errors.New("illegal payload header: " + string(psyncPayload1.Data.ToBytes()))
-	}
-
-	headers := strings.Split(psyncHeader.Status, " ")
-	if len(headers) != 3 {
-		return errors.New("illegal payload header: " + psyncHeader.Status)
-	}
-	logger.Info("receive psync header from master: ", psyncHeader.Status)
-
 	psyncPayload2 := <-ch
 	if psyncPayload2.Err != nil {
 		return errors.New("read response failed: " + psyncPayload2.Err.Error())
@@ -352,7 +377,7 @@ func (mdb *MultiDB) doPsync() error {
 	}
 	rdbDec := rdb.NewDecoder(bytes.NewReader(rdbBytes))
 	rdbHolder := MakeBasicMultiDB()
-	err = dumpRDB(rdbDec, rdbHolder)
+	err := dumpRDB(rdbDec, rdbHolder)
 	if err != nil {
 		return errors.New("dump rdb failed: " + err.Error())
 	}
@@ -379,10 +404,36 @@ func (mdb *MultiDB) doPsync() error {
 		mdb.loadDB(i, newDB)
 	}
 
-	// there is no CRLF between RDB and following AOF, reset stream to avoid parser error
-	//mdb.replication.masterChan = parser.ParseStream(mdb.replication.masterConn)
-	// fixme: update aof file
 	return nil
+}
+/*
+向 master 发送同步命令，并通过 master 的返回值，判断是做完整重同步还是部分重同步
+0 and error == nil or error 不为空 -> 完整重同步
+1 and error == nil -> 部分重同步
+*/
+func (mdb *MultiDB) sendAndJudgePsync(psyncCmd [][]byte) (int, *protocol.StatusReply, error) {
+	psyncReq := protocol.MakeMultiBulkReply(psyncCmd)
+	_, err := mdb.replication.masterConn.Write(psyncReq.ToBytes())
+	if err != nil {
+		return 0, nil, errors.New("send failed " + err.Error())
+	}
+	// 仍要根据 master 的返回值确定做哪种类型的同步
+	ch := mdb.replication.masterChan
+	psyncPayload1 := <-ch
+	if psyncPayload1.Err != nil {
+		return 0, nil, errors.New("psync response failed: " + psyncPayload1.Err.Error())
+	}
+	psyncHeader, ok := psyncPayload1.Data.(*protocol.StatusReply)
+	if !ok {
+		return 0, nil, errors.New("illegal payload header: " + string(psyncPayload1.Data.ToBytes()))
+	}
+	if strings.HasPrefix(psyncHeader.Status, "fullsync") {
+		return 0, psyncHeader, nil
+	} else if strings.HasPrefix(psyncHeader.Status, "continue") {
+		return 1, psyncHeader, nil
+	}
+
+	return 0, nil, errors.New(psyncHeader.Status)
 }
 
 // 主从模式，命令传播，slave 从 master 那获取写命令，然后在本地执行
@@ -408,8 +459,14 @@ func (mdb *MultiDB) receiveAOF() error {
 				logger.Info("receiveAOF, payload error, ", payload.Err)
 				return payload.Err
 			}
-			cmdLine, ok := payload.Data.(*protocol.MultiBulkReply)
-			if !ok {
+
+			if protocol.IsOKReply(payload.Data) {
+				mdb.replication.lastRecvTime = time.Now()
+				break
+			}
+
+			cmdLine, bulkOk := payload.Data.(*protocol.MultiBulkReply)
+			if !bulkOk {
 				logger.Info("unexpected payload: " + string(payload.Data.ToBytes()))
 				return errors.New("unexpected payload: " + string(payload.Data.ToBytes()))
 			}
@@ -421,7 +478,7 @@ func (mdb *MultiDB) receiveAOF() error {
 			mdb.Exec(conn, cmdLine.Args)
 			// todo: directly get size from socket
 			n := len(cmdLine.ToBytes())
-			mdb.replication.replOffset += int64(n)
+			mdb.replication.replOffset++
 			logger.Info(fmt.Sprintf("receive %d bytes from master, current offset %d",
 				n, mdb.replication.replOffset))
 			mdb.replication.mutex.Unlock()

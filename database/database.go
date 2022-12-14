@@ -10,6 +10,7 @@ import (
 	"github.com/hodis/redis/connection"
 	"github.com/hodis/redis/protocol"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -32,11 +33,14 @@ type MultiDB struct {
 
 	// 如果节点本身是 master 节点的话，这里存储所有 slave 节点的地址
 	// 存储的目的是为了在 info replication 命令时，显示 slave 信息
-	slaves []*slaveNode
+	slaves map[string]redis.Connection
+
 }
 
 func NewStandaloneServer() *MultiDB {
-	mdb := &MultiDB{}
+	mdb := &MultiDB{
+		slaves: make(map[string]redis.Connection),
+	}
 	if config.Properties.Databases == 0 {
 		// 默认 16 个数据库
 		config.Properties.Databases = 16
@@ -170,44 +174,51 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		if mdb.role == slaveRole {
 			return protocol.MakeErrReply("slave node cannot handle replconf command")
 		}
-		slaveClient, ok := c.(*connection.Connection)
-		if !ok {
-			return protocol.MakeErrReply("wrong connection type")
-		}
-		ls := strings.Split(slaveClient.RemoteAddr().String(), ":")
 		key := strings.ToLower(string(cmdLine[1]))
 		if key == "listening-port" {
 			// 在收到来自 slave 的 ack 后，初始化用于命令传播的回调函数
 			for _, db := range mdb.dbSet {
 				singleDB := db.Load().(*DB)
 				// 用于主从模式下的命令传播
+				if singleDB.cmdSync != nil {
+					continue
+				}
 				singleDB.cmdSync = func(line CmdLine) (ret error) {
 					logger.Info("xxx sync")
 					// 只有自己是 master，才有资格向 slave 传播写命令
 					if atomic.LoadInt32(&mdb.role) == masterRole {
 						keyCommand := string(line[0])
 						logger.Info("command sync key: ", keyCommand)
-						cc, _ := c.(*connection.Connection)
-						logger.Info("cmdSync, addr: ", cc.RemoteAddr())
-						syncReq := protocol.MakeMultiBulkReply(line)
-						ret = c.Write(syncReq.ToBytes())
-						if ret != nil {
-							logger.Info("command sync failed: ", ret.Error())
+						// todo 这里应该循环遍历所有的 salve connection
+						for _, cc := range mdb.slaves {
+							syncReq := protocol.MakeMultiBulkReply(line)
+							ret = cc.Write(syncReq.ToBytes())
+							if ret != nil {
+								logger.Info("command sync failed: ", ret.Error())
+							}
 						}
+						// 记录
+						mdb.replication.mutex.Lock()
+						defer mdb.replication.mutex.Unlock()
+						mdb.replication.replBuffer[mdb.replication.replOffset] = line
+						mdb.replication.replOffset = (mdb.replication.replOffset + 1) % REPL_BUFFER_SIZE
 					}
 					return ret
 				}
 			}
-			port := string(cmdLine[2])
-			sn := &slaveNode{
-				slaveIp:   strings.TrimSpace(ls[0]),
-				slavePort: strings.TrimSpace(port),
-			}
-			mdb.slaves = append(mdb.slaves, sn)
+			cc := c.(*connection.Connection)
+			mdb.slaves[cc.RemoteAddr().String()] = c
 			return protocol.MakeOkReply()
 		} else if key == "ack" {
 			// 收到来自 slave 的 ack
-			// todo master 需要更新来自 slave 的 offset
+			slaveReplOffset, err := strconv.ParseInt(string(cmdLine[2]), 10, 64)
+			if err != nil {
+				return protocol.MakeErrReply("illegal slave replication offset")
+			}
+			// master 需要处理来自 slave 的 offset，如果 offset 与 master 记录的 offset 有偏差，证明主从不一致，需要同步命令
+			if slaveReplOffset < mdb.replication.replOffset {
+				go sendCmdToSlave(slaveReplOffset, mdb, c)
+			}
 			return protocol.MakeOkReply()
 		} else {
 			return protocol.MakeErrReply("unknown command for replconf")
@@ -228,6 +239,28 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 			// 这里我们直接用 master 的 ip:port 地址作为 runId 来回复，这时的 offset 为 0
 			msg := fmt.Sprintf("fullsync %s:%d 0", config.Properties.Bind, config.Properties.Port)
 			return protocol.MakeStatusReply(msg)
+		} else {
+			// 收到来自 slave 节点的部分重同步命令
+			// 先判断 runid 是否匹配，如果不匹配，则回复 slave 进行完整重同步，我们这里用的 runid 就是 masterip:masterport
+			runId := string(cmdLine[1])
+			offset, err := strconv.ParseInt(string(cmdLine[2]), 10, 64)
+			if err != nil {
+				return protocol.MakeErrReply("illegal slave replication offset")
+			}
+			// 进行完整重同步
+			if runId != fmt.Sprintf("%s:%d", config.Properties.Bind, config.Properties.Port) {
+				msg := fmt.Sprintf("fullsync %s:%d 0", config.Properties.Bind, config.Properties.Port)
+				go SaveAndSendRDB(mdb, c)
+				return protocol.MakeStatusReply(msg)
+			}
+			// 进行部分重同步
+			for i:=offset;i<mdb.replication.replOffset;i++ {
+				syncReq := protocol.MakeMultiBulkReply(mdb.replication.replBuffer[i])
+				ret := c.Write(syncReq.ToBytes())
+				if ret != nil {
+					logger.Info("command sync failed: ", ret.Error())
+				}
+			}
 		}
 	}
 
@@ -265,6 +298,16 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	}
 
 	return selectDB.Exec(c, cmdLine)
+}
+
+func sendCmdToSlave(slaveReplOffset int64, mdb *MultiDB, c redis.Connection) {
+	for i:=slaveReplOffset;i<mdb.replication.replOffset;i++ {
+		syncReq := protocol.MakeMultiBulkReply(mdb.replication.replBuffer[i])
+		ret := c.Write(syncReq.ToBytes())
+		if ret != nil {
+			logger.Info("command sync failed: ", ret.Error())
+		}
+	}
 }
 
 func CanExecWriteCmd(db *MultiDB, conn *connection.Connection, cmdName string) bool {
