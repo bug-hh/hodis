@@ -20,5 +20,10 @@ logs/
 # redis cluster test
 redis-cluster-test/
 
+# redis sentinel test
+redis-sentinel-test/
+
 # rdb 文件
 *.rdb
+
+info_resp.txt

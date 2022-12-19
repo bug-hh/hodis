@@ -5,9 +5,17 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ca7db3ff-d765-494d-9330-d429c5ccb6d9" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/config/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/database.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/replication.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/replication.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis_master.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_master.conf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis_slave_1.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_slave_1.conf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis_slave_2.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_slave_2.conf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis_slave_3.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_slave_3.conf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/server/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/server/server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -42,12 +50,15 @@
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.sdk.automatically.set" value="true" />
     <property name="go.tried.to.enable.integration.vgo.integrator" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/redis/client" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/redis-sentinel-test" />
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/redis-sentinel-test" />
+      <recent name="$PROJECT_DIR$/redis-sentinel-test/30002" />
+      <recent name="$PROJECT_DIR$/redis-sentinel-test/30001" />
+      <recent name="$PROJECT_DIR$/redis-sentinel-test/30000" />
       <recent name="$PROJECT_DIR$/redis/client" />
-      <recent name="$PROJECT_DIR$" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/redis" />

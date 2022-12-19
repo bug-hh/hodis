@@ -26,6 +26,10 @@ type ServerProperties struct {
 
 	Peers []string `cfg:"peers"`
 	Self  string   `cfg:"self"`
+
+	//Sentinel *sentinel.SentinelState
+
+	Sentinel map[string]map[string]interface{}
 }
 
 // Properties holds global config properties
@@ -37,6 +41,7 @@ func init() {
 		Bind:       "127.0.0.1",
 		Port:       6379,
 		AppendOnly: false,
+		Sentinel: make(map[string]map[string]interface{}),
 	}
 }
 
@@ -98,6 +103,58 @@ func parse(src io.Reader) *ServerProperties {
 	return config
 }
 
+func parseSentinelConfigFile(src io.Reader) *ServerProperties {
+	config := &ServerProperties{
+		Bind: "127.0.0.1",
+		Sentinel: make(map[string]map[string]interface{}),
+	}
+
+	scanner := bufio.NewScanner(src)
+	masterName := ""
+	masterIp := ""
+	masterPort := 0
+	quorum := 0
+	downAfterMilliseconds := 0
+	parallelSyncs := 0
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if (len(line) > 0 && line[0] == '#') || len(line) < 3 {
+			continue
+		}
+		// 获取被空格分割的元素列表
+		items := strings.Fields(line)
+		if items[0] == "port" {
+			config.Port, _ = strconv.Atoi(items[1])
+		} else if items[0] == "sentinel" {
+			if items[1] == "monitor" && len(items) == 6 {
+				masterName = items[2]
+				if _, exists := config.Sentinel[masterName]; !exists {
+					config.Sentinel[masterName] = make(map[string]interface{})
+				}
+				masterIp = items[3]
+				masterPort, _ = strconv.Atoi(items[4])
+				quorum, _ = strconv.Atoi(items[5])
+
+				config.Sentinel[masterName]["quorum"] = quorum
+				config.Sentinel[masterName]["master_name"] = masterName
+				config.Sentinel[masterName]["ip"] = masterIp
+				config.Sentinel[masterName]["port"] = masterPort
+			} else if items[1] == "down-after-milliseconds" {
+				downAfterMilliseconds, _ = strconv.Atoi(items[3])
+				config.Sentinel[masterName]["down_after_milliseconds"] = downAfterMilliseconds
+			} else if items[1] == "parallel-syncs" {
+				parallelSyncs, _ = strconv.Atoi(items[3])
+				config.Sentinel[masterName]["parallel_syncs"] = parallelSyncs
+			} else {
+				logger.Warn("unknown sentinel config")
+			}
+		}
+	}
+
+	return config
+}
+
 // SetupConfig read config file and store properties into Properties
 func SetupConfig(configFilename string) {
 	file, err := os.Open(configFilename)
@@ -106,4 +163,15 @@ func SetupConfig(configFilename string) {
 	}
 	defer file.Close()
 	Properties = parse(file)
+}
+
+func SetupSentinelConfig(configFileName string) {
+	file, err := os.Open(configFileName)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	Properties = parseSentinelConfigFile(file)
+
+
 }

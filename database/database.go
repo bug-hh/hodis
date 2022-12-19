@@ -93,7 +93,7 @@ func NewStandaloneServer() *MultiDB {
 	mdb.replication = initReplStatus()
 	mdb.startReplCron()
 	// 初始化时，默认自己是 master
-	mdb.role = masterRole
+	mdb.role = MasterRole
 
 	return mdb
 }
@@ -171,7 +171,7 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		if len(cmdLine) != 3 {
 			return protocol.MakeArgNumErrReply("replconf")
 		}
-		if mdb.role == slaveRole {
+		if mdb.role == SlaveRole {
 			return protocol.MakeErrReply("slave node cannot handle replconf command")
 		}
 		key := strings.ToLower(string(cmdLine[1]))
@@ -186,7 +186,7 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 				singleDB.cmdSync = func(line CmdLine) (ret error) {
 					logger.Info("xxx sync")
 					// 只有自己是 master，才有资格向 slave 传播写命令
-					if atomic.LoadInt32(&mdb.role) == masterRole {
+					if atomic.LoadInt32(&mdb.role) == MasterRole {
 						keyCommand := string(line[0])
 						logger.Info("command sync key: ", keyCommand)
 						// todo 这里应该循环遍历所有的 salve connection
@@ -229,7 +229,7 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		if len(cmdLine) != 3 {
 			return protocol.MakeArgNumErrReply("psync")
 		}
-		if mdb.role == slaveRole {
+		if mdb.role == SlaveRole {
 			return protocol.MakeErrReply("slave node cannot handle psync command")
 		}
 		// 收到来自 slave 节点的完整重同步命令
@@ -290,6 +290,13 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	if !CanExecWriteCmd(mdb, cc, cmdName) {
 		return protocol.MakeErrReply("READONLY You can't write against a read only replica.")
 	}
+
+	// 处理来自 sentinel 服务器的 info 命令
+	if cmdName == "info" {
+		//return protocol.MakeStatusReply("receive info from sentinel")
+		// 只返回给 sentinel 主从配置信息
+		return mdb.handleInfo()
+	}
 	// 常规命令
 	dbIndex := c.GetDBIndex()
 	selectDB, errReply := mdb.selectDB(dbIndex)
@@ -315,7 +322,7 @@ func CanExecWriteCmd(db *MultiDB, conn *connection.Connection, cmdName string) b
 		"set", "mset", "lpush", "rpush", "lpop", "rpop", "zadd", "zrem",
 	}
 	for _, cmd := range writeCmds {
-		return !(cmdName == cmd && atomic.LoadInt32(&db.role) == slaveRole && conn.GetRole() != connection.ReplicationRecvCli)
+		return !(cmdName == cmd && atomic.LoadInt32(&db.role) == SlaveRole && conn.GetRole() != connection.ReplicationRecvCli)
 	}
 	return true
 }
@@ -397,4 +404,36 @@ func (mdb *MultiDB) loadDB(dbIndex int, newDB *DB) redis.Reply {
 	newDB.addAof = oldDB.addAof // inherit oldDB
 	mdb.dbSet[dbIndex].Store(newDB)
 	return &protocol.OkReply{}
+}
+
+func (mdb *MultiDB) calcSlaves() []string {
+	var ret []string
+	i := 0
+	for _, conn := range mdb.slaves {
+		c := conn.(*connection.Connection)
+		addrs := strings.Split(c.RemoteAddr().String(), ":")
+		slaveInfo := fmt.Sprintf("slave%d:ip=%s,port=%s,state=online,offset=%d,lag=%d",
+			i, addrs[0], addrs[1], mdb.replication.replOffset, time.Now().Unix()-mdb.replication.lastRecvTime.Unix())
+		ret = append(ret, slaveInfo)
+		i++
+	}
+	return ret
+}
+
+func (mdb *MultiDB) handleInfo() redis.Reply {
+	text := []string{
+		"# Replication",
+		"role:master",
+		fmt.Sprintf("connected_slaves:%d", len(mdb.slaves)),
+	}
+	text = append(text, mdb.calcSlaves()...)
+	text = append(text, fmt.Sprintf("master_replid:%s:%d", config.Properties.Bind, config.Properties.Port))
+	text = append(text, fmt.Sprintf("master_repl_offset:%d", mdb.replication.replOffset))
+
+	var content [][]byte
+	for _, s := range text {
+		bs := []byte(s)
+		content = append(content, bs)
+	}
+	return protocol.MakeMultiBulkReply(content)
 }

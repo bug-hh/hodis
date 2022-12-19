@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	masterRole = iota
-	slaveRole
+	MasterRole = iota
+	SlaveRole
 )
 
 const (
@@ -123,7 +123,7 @@ func (mdb *MultiDB) slaveCron() {
 	}
 	err := repl.sendAck2Master()
 	if err != nil {
-		logger.Error("send failed " + err.Error())
+		logger.Error("send ack to master failed " + err.Error())
 	}
 	//ackResp := <-repl.masterAckChan
 	//if protocol.IsOKReply(ackResp.Data) {
@@ -146,7 +146,7 @@ func (mdb *MultiDB) execSlaveOf(c redis.Connection, args [][]byte) redis.Reply {
 	}
 	mdb.replication.mutex.Lock()
 	// 修改节点的状态为 slave
-	atomic.StoreInt32(&mdb.role, slaveRole)
+	atomic.StoreInt32(&mdb.role, SlaveRole)
 
 	mdb.replication.masterHost = host
 	mdb.replication.masterPort = port

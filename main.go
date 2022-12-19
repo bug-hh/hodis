@@ -40,9 +40,17 @@ func main() {
 		TimeFormat: "2022-10-29",
 	})
 	var configFilename = ""
+	isSentinel := false
 	// 如果用户在命令行指定了配置文件，就优先读命令行
 	if len(os.Args) == 2 {
 		configFilename = os.Args[1]
+	} else if len(os.Args) == 3  && os.Args[2] == "--sentinel" {
+		if !fileExists(os.Args[1]) {
+			logger.Error("cannot found sentinel config file!")
+			return
+		}
+		configFilename = os.Args[1]
+		isSentinel = true
 	} else if fileExists("hodis.conf") {
 		// 如果当前目录下有配置文件，就读配置文件
 		configFilename = "hodis.conf"
@@ -55,6 +63,9 @@ func main() {
 	if configFilename == "" {
 		// 要是什么都没有，就用默认配置
 		config.Properties = defaultProperties
+	} else if isSentinel {
+		logger.Info("isSentinel")
+		config.SetupSentinelConfig(configFilename)
 	} else {
 		logger.Info("setup config, configFileName: ", configFilename)
 		config.SetupConfig(configFilename)

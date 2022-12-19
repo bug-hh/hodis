@@ -11,6 +11,7 @@ import (
 	"github.com/hodis/redis/connection"
 	"github.com/hodis/redis/parser"
 	"github.com/hodis/redis/protocol"
+	"github.com/hodis/sentinel"
 	"io"
 	"net"
 	"strings"
@@ -30,14 +31,15 @@ var (
 
 func MakeHandler() *Handler {
 	var db database.DB
-
+	logger.Info("MakeHandler len(config.Properties.Sentinel): ", len(config.Properties.Sentinel))
 	if config.Properties.Self != "" && len(config.Properties.Peers) > 0 {
-		// 开启集群模式
 		logger.Info("开启集群模式")
 		db = cluster.MakeCluster()
+	} else if len(config.Properties.Sentinel) > 0 {
+		logger.Info("开启 sentinel 模式")
+		db = sentinel.NewSentinelServer()
 	} else {
 		logger.Info("开启单机模式")
-		// 开启单机模式
 		db = database2.NewStandaloneServer()
 	}
 	return &Handler{
