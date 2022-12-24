@@ -123,3 +123,20 @@ func (lock *Locks) RWUnLocks(writeKeys []string, readKeys []string) {
 		}
 	}
 }
+
+func (locks *Locks) Locks(keys ...string) {
+	indices := locks.toLockIndices(keys, false)
+	for _, index := range indices {
+		mu := locks.table[index]
+		mu.Lock()
+	}
+}
+
+// UnLocks releases multiple exclusive locks
+func (locks *Locks) UnLocks(keys ...string) {
+	indices := locks.toLockIndices(keys, true)
+	for _, index := range indices {
+		mu := locks.table[index]
+		mu.Unlock()
+	}
+}

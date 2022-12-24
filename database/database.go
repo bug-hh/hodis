@@ -7,6 +7,8 @@ import (
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
 	"github.com/hodis/lib/logger"
+	"github.com/hodis/lib/utils"
+	"github.com/hodis/pubsub"
 	"github.com/hodis/redis/connection"
 	"github.com/hodis/redis/protocol"
 	"runtime/debug"
@@ -21,8 +23,8 @@ type MultiDB struct {
 	dbSet []*atomic.Value
 
 	// todo 需要时再实现 handle publish/subscribe
-	//hub *pubsub.Hub
-	// todo 需要时再实现 handle aof persistence
+	hub *pubsub.Hub
+
 	aofHandler *aof.Handler
 
 	// store master node address
@@ -35,6 +37,7 @@ type MultiDB struct {
 	// 存储的目的是为了在 info replication 命令时，显示 slave 信息
 	slaves map[string]redis.Connection
 
+	monitors []redis.Connection
 }
 
 func NewStandaloneServer() *MultiDB {
@@ -55,6 +58,7 @@ func NewStandaloneServer() *MultiDB {
 	}
 
 	// todo 以后实现订阅，发布功能
+	mdb.hub = pubsub.MakeHub()
 
 	// aof 功能
 	validAof := false
@@ -158,8 +162,14 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	}()
 
 	cmdName := strings.ToLower(string(cmdLine[0]))
-	if cmdName != "ping" && cmdName != "replconf"{
+	if cmdName != "ping" && cmdName != "replconf" {
 		logger.Info("MultiDB cmdName: ", cmdName)
+	}
+
+	if cmdName == "monitor" {
+		// 服务器收到这个消息后，把对应 client 连接加入 monitors 链表
+		mdb.monitors = append(mdb.monitors, c)
+		return protocol.MakeOkReply()
 	}
 
 	// todo 之后实现 authenticate
@@ -283,6 +293,13 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		return RewriteAOF(mdb, cmdLine[1:])
 	} else if cmdName == "bgsave" {
 		return BGSaveRDB(mdb)
+	} else if cmdName == "subscribe" {
+		if len(cmdLine) != 2 {
+			return protocol.MakeArgNumErrReply("subscribe")
+		}
+		return pubsub.Subscribe(mdb.hub, c, cmdLine[1:])
+	} else if cmdName == "publish" {
+		return pubsub.Publish(mdb.hub, cmdLine[1:])
 	}
 	// 如果本节点时 slave 节点，那么不允许 slave 接受来自客户端的写操作（擅自进行写操作，应该由 master 节点进行同步）
 	// 这里统一拦截掉
@@ -304,7 +321,24 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		return errReply
 	}
 
+	if len(mdb.monitors) > 0 {
+		sendCommandToMonitor(mdb, c, cmdLine)
+	}
+
 	return selectDB.Exec(c, cmdLine)
+}
+
+func sendCommandToMonitor(mdb *MultiDB, conn redis.Connection, cmdLine CmdLine) {
+	c := conn.(*connection.Connection)
+	utils.ToCmdLine()
+	msg := fmt.Sprintf("%+v [%d %s] %s", time.Now().Unix(), conn.GetDBIndex(), c.RemoteAddr().String(), utils.FormatCmdLine(cmdLine))
+	time.Now().Unix()
+	for _, m := range mdb.monitors {
+		err := m.Write(protocol.MakeStatusReply(msg).ToBytes())
+		if err != nil {
+			logger.Info("send to monitor failed")
+		}
+	}
 }
 
 func sendCmdToSlave(slaveReplOffset int64, mdb *MultiDB, c redis.Connection) {

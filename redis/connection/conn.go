@@ -68,16 +68,26 @@ func (c *Connection) Write(b []byte) error {
 	return err
 }
 
-/*
-暂时保持空实现
- */
 func (c *Connection) Subscribe(channel string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
+	if c.subs == nil {
+		c.subs = make(map[string]bool)
+	}
+
+	c.subs[channel] = true
 }
 
 // UnSubscribe removes current connection into subscribers of the given channel
 func (c *Connection) UnSubscribe(channel string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
+	if len(c.subs) == 0 {
+		return
+	}
+	delete(c.subs, channel)
 }
 
 // SubsCount returns the number of subscribing channels

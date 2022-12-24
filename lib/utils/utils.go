@@ -1,5 +1,7 @@
 package utils
 
+import "strings"
+
 func BytesEquals(a, b []byte) bool {
 	if (a == nil && b != nil) || (a != nil && b == nil) {
 		return false
@@ -45,4 +47,12 @@ func ToCmdLine3(commandName string, args ...[]byte) [][]byte {
 		result[i+1] = []byte(s)
 	}
 	return result
+}
+
+func FormatCmdLine(cmdLine [][]byte) string {
+	sArr := make([]string, 0, len(cmdLine))
+	for _, cmd := range cmdLine {
+		sArr = append(sArr, string(cmd))
+	}
+	return strings.Join(sArr, " ")
 }

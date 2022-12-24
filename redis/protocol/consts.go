@@ -70,3 +70,13 @@ var theQueuedReply = new(QueuedReply)
 func MakeQueuedReply() *QueuedReply {
 	return theQueuedReply
 }
+
+// NoReply respond nothing, for commands like subscribe
+type NoReply struct{}
+
+var noBytes = []byte("")
+
+// ToBytes marshal redis.Reply
+func (r *NoReply) ToBytes() []byte {
+	return noBytes
+}
