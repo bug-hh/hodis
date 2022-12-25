@@ -27,8 +27,11 @@ type ServerProperties struct {
 	Peers []string `cfg:"peers"`
 	Self  string   `cfg:"self"`
 
-	//Sentinel *sentinel.SentinelState
+	//任何执行时长大于或等于它的命令，都会被认为是慢查询命令，都会被慢查询日志记录下来, 单位是微秒
+	SlowLogLogSlowerThan int64 `cfg:"slowlog-log-slower-than"`
+	SlowLogMaxLen int `cfg:"slowlog-max-len"`
 
+	//Sentinel *sentinel.SentinelState
 	Sentinel map[string]map[string]interface{}
 }
 
@@ -41,6 +44,7 @@ func init() {
 		Bind:       "127.0.0.1",
 		Port:       6379,
 		AppendOnly: false,
+		SlowLogLogSlowerThan: -1,
 		Sentinel: make(map[string]map[string]interface{}),
 	}
 }

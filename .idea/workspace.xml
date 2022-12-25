@@ -5,14 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ca7db3ff-d765-494d-9330-d429c5ccb6d9" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/pubsub/pubsub.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/config/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/database.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/datastruct/lock/lock_map.go" beforeDir="false" afterPath="$PROJECT_DIR$/datastruct/lock/lock_map.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/datastruct/list/linked.go" beforeDir="false" afterPath="$PROJECT_DIR$/datastruct/list/linked.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/hodis_master.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_master.conf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/utils/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/lib/utils/utils.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/connection/conn.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/connection/conn.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/protocol/consts.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/consts.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

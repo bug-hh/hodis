@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/hodis/aof"
 	"github.com/hodis/config"
+	"github.com/hodis/datastruct/list"
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
 	"github.com/hodis/lib/logger"
@@ -38,6 +39,11 @@ type MultiDB struct {
 	slaves map[string]redis.Connection
 
 	monitors []redis.Connection
+
+	slowLogEntryId int
+	slowLogList *list.LinkedList
+	slowLogLogSlowerThan int64
+	slowLogMaxLen int
 }
 
 func NewStandaloneServer() *MultiDB {
@@ -92,6 +98,12 @@ func NewStandaloneServer() *MultiDB {
 	if config.Properties.RDBFilename != "" && !validAof {
 		loadRdbFile(mdb)
 	}
+
+	//初始化 slow log 配置
+	mdb.slowLogLogSlowerThan = config.Properties.SlowLogLogSlowerThan
+	mdb.slowLogList = list.Make()
+	mdb.slowLogEntryId = 0
+	mdb.slowLogMaxLen = config.Properties.SlowLogMaxLen
 
 	// 主从模式复制
 	mdb.replication = initReplStatus()
@@ -170,6 +182,14 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		// 服务器收到这个消息后，把对应 client 连接加入 monitors 链表
 		mdb.monitors = append(mdb.monitors, c)
 		return protocol.MakeOkReply()
+	}
+
+	if cmdName == "slowlog" {
+		if len(cmdLine) != 2 {
+			return protocol.MakeArgNumErrReply("slowlog get")
+		}
+		// 获取所有慢日志
+		return mdb.getSlowLog()
 	}
 
 	// todo 之后实现 authenticate
@@ -324,8 +344,14 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	if len(mdb.monitors) > 0 {
 		sendCommandToMonitor(mdb, c, cmdLine)
 	}
+	// 记录下命令开始执行时间
+	startTime := time.Now()
+	cmdReply := selectDB.Exec(c, cmdLine)
+	// 记录下命令结束执行时间
+	endTime := time.Now()
+	mdb.handleSlowLog(startTime.UnixMicro(), endTime.UnixMicro(), cmdLine)
 
-	return selectDB.Exec(c, cmdLine)
+	return cmdReply
 }
 
 func sendCommandToMonitor(mdb *MultiDB, conn redis.Connection, cmdLine CmdLine) {
@@ -471,3 +497,4 @@ func (mdb *MultiDB) handleInfo() redis.Reply {
 	}
 	return protocol.MakeMultiBulkReply(content)
 }
+

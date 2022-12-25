@@ -74,3 +74,17 @@ func (list *LinkedList) Len() int {
 	}
 	return list.size
 }
+
+func (list *LinkedList) RemoveFirst() {
+	if list.first == nil || list.size == 0 {
+		return
+	}
+	next := list.first.next
+	// 有可能链表就只有一个元素
+	if next != nil {
+		next.prev = nil
+	}
+
+	list.first = next
+	list.size--
+}
