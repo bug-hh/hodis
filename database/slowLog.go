@@ -54,7 +54,7 @@ func (mdb *MultiDB) getSlowLog() redis.Reply {
 		entry := v.(*SlowLogEntry)
 		bs.WriteString(strconv.Itoa(entry.id))
 		bs.WriteString("\n")
-		bs.WriteString(strconv.Itoa(entry.timestamp))
+		bs.WriteString(strconv.FormatInt(entry.timestamp, 10))
 		bs.WriteString("\n")
 		bs.WriteString(strconv.FormatInt(entry.duration, 10))
 		bs.WriteString("\n")

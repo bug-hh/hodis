@@ -3,7 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/hodis/redis/parser"
+	"github.com/hodis/datastruct/bits"
 	"strings"
 )
 
@@ -37,31 +37,7 @@ func handleCMD(s string) []byte {
 }
 
 func main() {
-	bs := []byte{
-		42, 52, 13, 10, 43, 79, 75, 13, 10,
-		43, 79, 75, 13, 10, 42, 49, 13, 10,
-		36, 49, 13, 10, 118, 13, 10, 42, 51,
-		13, 10, 36, 49, 13, 10, 49, 13, 10,
-		36, 49, 13, 10, 50, 13, 10, 36, 49,
-		13, 10, 51, 13, 10,
-	}
-
-	r := bytes.NewReader(bs)
-
-	ch := make(chan *parser.Payload, 100)
-	parser.Parse00(r, ch)
-	for payload := range ch {
-		if payload.Err != nil {
-			fmt.Printf("payload 发生错误: %+v\n", payload.Err)
-			break
-		}
-
-		if payload.Data == nil {
-			fmt.Printf("payload empty data\n")
-			continue
-		}
-
-		fmt.Printf("payload data: \n%s\n", string(payload.Data.ToBytes()))
-	}
-
+	bs := bits.MakeFromBytes([]byte("foobarfoobarfoobarff"))
+	ret := bs.BitsCount(0, 0)
+	fmt.Printf("%+v\n", ret)
 }

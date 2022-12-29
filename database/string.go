@@ -2,6 +2,7 @@ package database
 
 import (
 	"github.com/hodis/aof"
+	"github.com/hodis/datastruct/bits"
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
 	"github.com/hodis/lib/logger"
@@ -19,6 +20,18 @@ const (
 )
 
 const unlimitedTTL int64 = 0
+
+func (db *DB) getAsBitMap(key string) (bits.BinaryBit, protocol.ErrorReply) {
+	entity, ok := db.GetEntity(key)
+	if !ok {
+		return nil, nil
+	}
+	bytes, ok := entity.Data.(bits.BinaryBit)
+	if !ok {
+		return nil, &protocol.WrongTypeErrReply{}
+	}
+	return bytes, nil
+}
 
 func (db *DB) getAsString(key string) ([]byte, protocol.ErrorReply) {
 	entity, ok := db.GetEntity(key)
@@ -241,6 +254,88 @@ func execMSet(db *DB, args [][]byte) redis.Reply {
 	return &protocol.OkReply{}
 }
 
+//setbits key offset value
+func execSetBit(db *DB, args [][]byte) redis.Reply {
+	if len(args) != 3 {
+		return protocol.MakeArgNumErrReply("setbits")
+	}
+
+	key := string(args[0])
+	offset, err := strconv.ParseInt(string(args[1]), 10, 64)
+	if err != nil {
+		return protocol.MakeErrReply("convert offset error, " + err.Error())
+	}
+
+	value := 0
+	if string(args[2]) == "1" {
+		value = 1
+	}
+
+	bs, err := db.getAsBitMap(key)
+	if err != nil {
+		return protocol.MakeErrReply("get bits array error, " + err.Error())
+	}
+	oldValue := 0
+	if bs != nil && len(bs) > 0 {
+		oldValue = int(bs.GetBits(offset))
+	}
+	bs.SetBits(offset, value)
+	db.PutEntity(key, &database.DataEntity{Data: bs})
+	return protocol.MakeIntReply(int64(oldValue))
+}
+
+//getbits key offset
+func execGetBit(db *DB, args [][]byte) redis.Reply {
+	if len(args) != 2 {
+		return protocol.MakeArgNumErrReply("getbit")
+	}
+
+	key := string(args[0])
+	offset, err := strconv.ParseInt(string(args[1]), 10, 64)
+	if err != nil {
+		return protocol.MakeErrReply("convert offset error, " + err.Error())
+	}
+
+	bs, err := db.getAsBitMap(key)
+	if err != nil {
+		return protocol.MakeErrReply("get bits array error, " + err.Error())
+	}
+	if bs == nil || len(bs) == 0 {
+		return protocol.MakeNullBulkReply()
+	}
+
+	return protocol.MakeIntReply(int64(bs.GetBits(offset)))
+}
+
+//bitcount key [start] [end]
+func execBitCount(db *DB, args [][]byte) redis.Reply {
+	key := string(args[0])
+	start := 0
+	end := -1
+	var err error
+	var bs bits.BinaryBit
+	if len(args) == 2 {
+		return protocol.MakeErrReply("syntax error")
+	}
+	if len(args) == 3 {
+		start, err = strconv.Atoi(string(args[1]))
+		if err != nil {
+			return protocol.MakeErrReply("illegal start")
+		}
+
+		end, err = strconv.Atoi(string(args[2]))
+		if err != nil {
+			return protocol.MakeErrReply("illegal end")
+		}
+	}
+
+	bs, err = db.getAsBitMap(key)
+	if err != nil {
+		return protocol.MakeErrReply("get bits array error, " + err.Error())
+	}
+
+	return protocol.MakeIntReply(int64(bs.BitsCount(start, end)))
+}
 
 func init() {
 	RegisterCommand("Get", execGet, readFirstKey, nil, 2, flagReadOnly)
@@ -249,4 +344,8 @@ func init() {
 	RegisterCommand("MGet", execMGet, prepareMGet, nil, -2, flagReadOnly)
 	RegisterCommand("MSet", execMSet, prepareMSet, undoMSet, -3, flagWrite)
 
+	RegisterCommand("SetBit", execSetBit, writeFirstKey, rollbackFirstKey, 4, flagWrite)
+	RegisterCommand("GetBit", execGetBit, writeFirstKey, nil, 3, flagReadOnly)
+
+	RegisterCommand("BitCount", execBitCount, readFirstKey, nil, -2, flagReadOnly)
 }
