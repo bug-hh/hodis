@@ -6,8 +6,6 @@ import (
 	"strconv"
 )
 
-
-
 func writeAllKeys(args [][]byte) ([]string, []string) {
 	keys := make([]string, len(args))
 	for i, v := range args {
@@ -86,4 +84,28 @@ func rollbackZSetFields(db *DB, key string, fields ...string) []CmdLine {
 
 func noPrepare(args [][]byte) ([]string, []string) {
 	return nil, nil
+}
+
+func rollbackHashFields(db *DB, key string, fields ...string) []CmdLine {
+	var undoCmdLines [][][]byte
+	dt, errReply := db.getAsDict(key)
+	if errReply != nil {
+		return nil
+	}
+
+	if dt == nil {
+		undoCmdLines = append(undoCmdLines, utils.ToCmdLine("DEL", key))
+		return undoCmdLines
+	}
+
+	for _, field := range fields {
+		entity, ok := dt.Get(field)
+		if ok {
+			undoCmdLines = append(undoCmdLines, utils.ToCmdLine("HDEL", key, field))
+		} else {
+			value, _ := entity.([]byte)
+			undoCmdLines = append(undoCmdLines, utils.ToCmdLine("HSET", key, field, string(value)))
+		}
+	}
+	return undoCmdLines
 }
