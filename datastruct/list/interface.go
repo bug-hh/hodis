@@ -21,5 +21,7 @@ type List interface {
 	ForEach(consumer Consumer)
 	Contains(expected Expected) bool
 	Range(start int, stop int) []interface{}
+	IndexOfVal(expected Expected) int
+	Trim(start int, stop int)
 }
 
