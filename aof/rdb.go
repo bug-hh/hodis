@@ -109,7 +109,7 @@ func (handler *Handler) rewrite2DB(ctx *RewriteCtx) error {
 					return true
 				})
 				err = encoder.WriteListObject(key, vals, opts...)
-			case *set.Set:
+			case *set.HashSet:
 				vals := make([][]byte, 0, obj.Len())
 				obj.ForEach(func(m string) bool {
 					vals = append(vals, []byte(m))

@@ -11,6 +11,7 @@ import (
 	"strings"
 )
 
+// todo 给每个写操作添加 cmdSync 调用
 
 func (db *DB) getAsDict(key string) (dictPackage.Dict, protocol.ErrorReply) {
 	entity, exists := db.GetEntity(key)

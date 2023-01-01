@@ -58,6 +58,10 @@ func NewStandaloneServer() *MultiDB {
 	for i := range mdb.dbSet {
 		singleDB := MakeDB()
 		singleDB.index = i
+		// 初始化一个空实现，保证调用不出错
+		singleDB.cmdSync = func(line CmdLine) error {
+			return nil
+		}
 		holder := &atomic.Value{}
 		holder.Store(singleDB)
 		mdb.dbSet[i] = holder
