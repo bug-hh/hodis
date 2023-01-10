@@ -2,6 +2,8 @@ package sortedset
 
 import (
 	"github.com/hodis/lib/logger"
+	"github.com/hodis/lib/utils"
+	"math"
 	"strconv"
 )
 
@@ -47,36 +49,67 @@ func (sortedSet *SortedSet) GetSkipList() *skiplist {
 	return sortedSet.skiplist
 }
 
+
+func cannotUpdate(scoreUpdatePolicy int, newScore float64, oldScore float64) bool {
+	return (scoreUpdatePolicy == utils.SORTED_SET_UPDATE_GREATER && newScore <= oldScore) ||
+		scoreUpdatePolicy == utils.SORTED_SET_UPDATE_LESS_THAN && newScore >= oldScore
+}
+
 // Add puts member into set,  and returns whether has inserted new node
-func (sortedSet *SortedSet) Add(member string, score float64) bool {
+func (sortedSet *SortedSet) Add(member string, score float64, policy int, scoreUpdatePolicy int, isCH, isINCR bool) bool {
 	element, ok := sortedSet.dict[member]
+	// 这个成员本来就存在，那么就更新分数 score
+	if ok {
+		if policy == utils.InsertPolicy || cannotUpdate(scoreUpdatePolicy, score, element.Score) {
+			return false
+		}
+
+		if isINCR {
+			score += element.Score
+		}
+
+		if score == element.Score {
+			return false
+		}
+
+		logger.Debug("INSERT OK")
+		// 先从 skiplist 中删除元素
+		sortedSet.skiplist.remove(member, element.Score)
+		// 再重新插入 skiplist
+		sortedSet.skiplist.insert(member, score)
+
+		sortedSet.dict[member] = &Element{
+			Member: member,
+			Score: score,
+		}
+		// 在没有指定 isCH 选项的情况下，并没有新增，只是更新，所以返回 false
+		if !isCH {
+			return false
+		}
+		return true
+	}
+	if policy == utils.UpdatePolicy {
+		logger.Debug("not ok return false")
+		return false
+	}
+	sortedSet.skiplist.insert(member, score)
 	sortedSet.dict[member] = &Element{
 		Member: member,
 		Score: score,
 	}
-	// 这个成员本来就存在，那么就更新分数 score
-	if ok {
-		if score != element.Score {
-			// 先从 skiplist 中删除元素
-			sortedSet.skiplist.remove(member, element.Score)
-			// 再重新插入 skiplist
-			sortedSet.skiplist.insert(member, score)
-		}
-		// 并没有新增，只是更新，所以返回 false
-		return false
-	}
-	sortedSet.skiplist.insert(member, score)
 	return true
 }
 
 // Len returns number of members in set
 func (sortedSet *SortedSet) Len() int64 {
-	logger.Debug("Len - dict: ", sortedSet.dict)
 	return int64(len(sortedSet.dict))
 }
 
 func (sortedSet *SortedSet) ForEach(start int64, stop int64, desc bool, consumer func(element *Element) bool) {
-	size := int64(sortedSet.Len())
+	size := sortedSet.Len()
+	if size == 0 {
+		return
+	}
 	if start < 0 || start >= size {
 		panic("illegal start " + strconv.FormatInt(start, 10))
 	}
@@ -88,14 +121,14 @@ func (sortedSet *SortedSet) ForEach(start int64, stop int64, desc bool, consumer
 	var node *node
 	// desc 代表是否降序排列
 	if desc {
-		node = sortedSet.skiplist.tail
+		node = sortedSet.skiplist.Tail
 		if start > 0 {
-			node = sortedSet.skiplist.getByRank(int64(size - start))
+			node = sortedSet.skiplist.getByRank(size - start)
 		}
 	} else {
-		node = sortedSet.skiplist.header.level[0].forward
+		node = sortedSet.skiplist.Header.level[0].forward
 		if start > 0 {
-			node = sortedSet.skiplist.getByRank(int64(start + 1))
+			node = sortedSet.skiplist.getByRank(start + 1)
 		}
 	}
 
@@ -127,4 +160,126 @@ func (sortedSet *SortedSet) Range(start int64, stop int64, desc bool) []*Element
 	return slice
 }
 
+func (sortedSet *SortedSet) Rank(member string, desc bool) int {
+	var start, stop int64
+	start = 0
+	stop = sortedSet.Len()
+	i := 0
+	ret := -1
+	sortedSet.ForEach(start, stop, desc, func(element *Element) bool {
+		if member == element.Member {
+			ret = i
+		}
+		i++
+		return true
+	})
+	return ret
+}
 
+func Unions(sets []*SortedSet, weights []float64, aggregate int) *SortedSet {
+	ret := Make()
+	for i, set := range sets {
+		if set == nil {
+			continue
+		}
+		set.ForEach(0, set.Len(), false, func(element *Element) bool {
+			item, exists := ret.Get(element.Member)
+			score := element.Score * weights[i]
+			if exists {
+				if aggregate == utils.AGGREGATE_SUM {
+					score += item.Score
+				} else if aggregate == utils.AGGREGATE_MAX {
+					score = math.Max(item.Score, element.Score * weights[i])
+				} else if aggregate == utils.AGGREGATE_MIN {
+					score = math.Min(item.Score, element.Score * weights[i])
+				}
+			}
+			ret.Add(element.Member, score, utils.UpsertPolicy, utils.SORTED_SET_UPDATE_ALL, false, false)
+			return true
+		})
+	}
+	return ret
+}
+
+func (sortedSet *SortedSet) Union(otherSet *SortedSet) *SortedSet {
+	ret := Make()
+	var start, stop int64
+	stop = sortedSet.Len()
+	sortedSet.ForEach(start, stop, false, func(element *Element) bool {
+		ret.Add(element.Member, element.Score, utils.UpsertPolicy, utils.SORTED_SET_UPDATE_ALL, false, false)
+		return true
+	})
+
+	stop = otherSet.Len()
+	otherSet.ForEach(start, stop, false, func(element *Element) bool {
+		ret.Add(element.Member, element.Score, utils.UpsertPolicy, utils.SORTED_SET_UPDATE_ALL, false, false)
+		return true
+	})
+	return ret
+}
+
+func (sortedSet *SortedSet) Diff(otherSet *SortedSet) *SortedSet {
+	ret := Make()
+	var start, stop int64
+	stop = sortedSet.Len()
+	sortedSet.ForEach(start, stop, false, func(element *Element) bool {
+		_, exists := otherSet.Get(element.Member)
+		if !exists {
+			ret.Add(element.Member, element.Score, utils.UpsertPolicy, utils.SORTED_SET_UPDATE_ALL, false, false)
+		}
+		return true
+	})
+	return ret
+}
+
+func (sortedSet *SortedSet) applyWeight(weight float64) *SortedSet {
+	ret := Make()
+	sortedSet.ForEach(0, sortedSet.Len(), false, func(element *Element) bool {
+		ret.Add(element.Member, element.Score * weight, utils.UpsertPolicy, utils.SORTED_SET_UPDATE_ALL, false, false)
+		return true
+	})
+	return ret
+}
+
+func Intersects(sets []*SortedSet, weights []float64, aggregate int) *SortedSet {
+	n := len(sets)
+	if n == 0 {
+		return nil
+	}
+
+	setsWithWeights := make([]*SortedSet, len(sets))
+	for i:=0;i<n;i++ {
+		setsWithWeights[i] = sets[i].applyWeight(weights[i])
+	}
+
+	if n == 1 {
+		return setsWithWeights[0]
+	}
+	i := 1
+	ret := setsWithWeights[0].intersect(setsWithWeights[i], aggregate)
+
+	for i=2;i<n;i++ {
+		ret = ret.intersect(setsWithWeights[i], aggregate)
+	}
+	return ret
+}
+
+func (sortedSet *SortedSet) intersect(otherSet *SortedSet, aggregate int) *SortedSet {
+	ret := Make()
+	var score float64 = 0
+	// 先遍历集合 A，找出 既属于 A 又属于 B 的元素放入 ret
+	sortedSet.ForEach(0, sortedSet.Len(), false, func(element *Element) bool {
+		if otherElement, exists := otherSet.Get(element.Member); exists {
+			if aggregate == utils.AGGREGATE_SUM {
+				score = element.Score + otherElement.Score
+			} else if aggregate == utils.AGGREGATE_MAX {
+				score = math.Max(element.Score, otherElement.Score)
+			} else if aggregate == utils.AGGREGATE_MIN {
+				score = math.Min(element.Score, otherElement.Score)
+			}
+			ret.Add(element.Member, score, utils.UpsertPolicy, utils.SORTED_SET_UPDATE_ALL, false, false)
+		}
+		return true
+	})
+	return ret
+}

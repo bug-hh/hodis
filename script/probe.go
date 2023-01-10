@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"github.com/hodis/datastruct/bits"
 	"strings"
 )
 
@@ -37,7 +36,10 @@ func handleCMD(s string) []byte {
 }
 
 func main() {
-	bs := bits.MakeFromBytes([]byte("foobarfoobarfoobarff"))
-	ret := bs.BitsCount(0, 0)
-	fmt.Printf("%+v\n", ret)
+
+	//for i, num := range nums {
+	//	member := strconv.Itoa(num)
+		//skList.insert(member, float64(i+1))
+	//}
+	//fmt.Printf("finish")
 }

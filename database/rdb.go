@@ -12,6 +12,7 @@ import (
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
 	"github.com/hodis/lib/logger"
+	"github.com/hodis/lib/utils"
 	"github.com/hodis/redis/protocol"
 	"io"
 	"os"
@@ -95,7 +96,7 @@ func dumpRDB(dec *core.Decoder, mdb *MultiDB) error {
 			zsetObj := o.(*rdb.ZSetObject)
 			zSet := sortedset.Make()
 			for _, e := range zsetObj.Entries {
-				zSet.Add(e.Member, e.Score)
+				zSet.Add(e.Member, e.Score, utils.UpsertPolicy, utils.SORTED_SET_UPDATE_ALL, false, false)
 			}
 			db.PutEntity(o.GetKey(), &database.DataEntity{
 				Data: zSet,

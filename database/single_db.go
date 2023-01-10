@@ -252,6 +252,18 @@ func (db *DB) Remove(key string) {
 	timewheel.Cancel(taskKey)
 }
 
+func (db *DB) Removes(keys ...string) int {
+	deleted := 0
+	for _, key := range keys {
+		_, exists := db.data.Get(key)
+		if exists {
+			db.Remove(key)
+			deleted++
+		}
+	}
+	return deleted
+}
+
 // Data access
 func (db *DB) GetEntity(key string) (*database.DataEntity, bool) {
 	raw, ok := db.data.Get(key)

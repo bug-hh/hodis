@@ -16,5 +16,5 @@ func Ping(db *DB, args [][]byte) redis.Reply {
 }
 
 func init() {
-	RegisterCommand("ping", Ping, noPrepare, nil, -1, flagReadOnly)
+	RegisterCommand("Ping", Ping, noPrepare, nil, -1, flagReadOnly)
 }

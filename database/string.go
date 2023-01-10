@@ -13,12 +13,6 @@ import (
 	"time"
 )
 
-const (
-	upsertPolicy = iota // default
-	insertPolicy        // set nx
-	updatePolicy        // set ex
-)
-
 const unlimitedTTL int64 = 0
 
 func (db *DB) getAsBitMap(key string) (bits.BinaryBit, protocol.ErrorReply) {
@@ -71,22 +65,22 @@ SET key value [EX seconds|PX milliseconds|KEEPTTL] [NX|XX] [GET]
 func execSet(db *DB, args [][]byte) redis.Reply {
 	key := string(args[0])
 	value := args[1]
-	policy := upsertPolicy
+	policy := utils.UpsertPolicy
 	ttl := unlimitedTTL
 
 	if len(args) > 2 {
 		for i:=2;i<len(args);i++ {
 			arg := strings.ToUpper(string(args[i]))
 			if arg == "NX" {
-				if policy == updatePolicy {
+				if policy == utils.UpdatePolicy {
 					return &protocol.SyntaxErrReply{}
 				}
-				policy = insertPolicy
+				policy = utils.InsertPolicy
 			} else if arg == "XX" {
-				if policy == insertPolicy {
+				if policy == utils.InsertPolicy {
 					return &protocol.SyntaxErrReply{}
 				}
-				policy = updatePolicy
+				policy = utils.UpdatePolicy
 			} else if arg == "EX" {
 				if ttl != unlimitedTTL {
 					return &protocol.SyntaxErrReply{}
@@ -134,12 +128,12 @@ func execSet(db *DB, args [][]byte) redis.Reply {
 
 	var result int
 	switch policy {
-	case upsertPolicy:
+	case utils.UpsertPolicy:
 		db.PutEntity(key, entity)
 		result = 1
-	case insertPolicy:
+	case utils.InsertPolicy:
 		result = db.PutIfAbsent(key, entity)
-	case updatePolicy:
+	case utils.UpdatePolicy:
 		result = db.PutIfExists(key, entity)
 	}
 
