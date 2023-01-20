@@ -49,10 +49,7 @@ func init() {
 	}
 }
 
-func parse(src io.Reader) *ServerProperties {
-	config := &ServerProperties{}
-
-	// read config file
+func generateRawMap(src io.Reader) map[string]string {
 	rawMap := make(map[string]string)
 	scanner := bufio.NewScanner(src)
 	for scanner.Scan() {
@@ -70,6 +67,31 @@ func parse(src io.Reader) *ServerProperties {
 	if err := scanner.Err(); err != nil {
 		logger.Fatal(err)
 	}
+	return rawMap
+}
+
+func parse(src io.Reader) *ServerProperties {
+	config := &ServerProperties{}
+
+	// read config file
+	rawMap := generateRawMap(src)
+	//rawMap := make(map[string]string)
+	//scanner := bufio.NewScanner(src)
+	//for scanner.Scan() {
+	//	line := scanner.Text()
+	//	if len(line) > 0 && line[0] == '#' {
+	//		continue
+	//	}
+	//	pivot := strings.IndexAny(line, " ")
+	//	if pivot > 0 && pivot < len(line)-1 { // separator found
+	//		key := line[0:pivot]
+	//		value := strings.Trim(line[pivot+1:], " ")
+	//		rawMap[strings.ToLower(key)] = value
+	//	}
+	//}
+	//if err := scanner.Err(); err != nil {
+	//	logger.Fatal(err)
+	//}
 
 	// parse format
 	t := reflect.TypeOf(config)
@@ -176,6 +198,62 @@ func SetupSentinelConfig(configFileName string) {
 	}
 	defer file.Close()
 	Properties = parseSentinelConfigFile(file)
+}
 
+const (
+	AllDefaultConfigFileName = "default_config.conf"
+)
 
+// 读取已载入内存配置 Properties
+func getOnlineConfig() map[string]string {
+	onlineMap := make(map[string]string)
+	t := reflect.TypeOf(Properties)
+	v := reflect.ValueOf(Properties)
+	n := t.Elem().NumField()
+	for i := 0; i < n; i++ {
+		field := t.Elem().Field(i)
+		fieldVal := v.Elem().Field(i)
+		key, ok := field.Tag.Lookup("cfg")
+		if !ok {
+			key = field.Name
+		}
+		switch field.Type.Kind() {
+		case reflect.String:
+			onlineMap[key] = fieldVal.String()
+		case reflect.Int:
+			onlineMap[key] = strconv.FormatInt(fieldVal.Int(), 10)
+		case reflect.Bool:
+			if fieldVal.Bool() {
+				onlineMap[key] = "yes"
+			} else {
+				onlineMap[key] = "no"
+			}
+		case reflect.Slice:
+			var temp []string
+			for j:=0;j<fieldVal.Len();j++ {
+				temp = append(temp, fieldVal.Index(i).String())
+			}
+			onlineMap[key] = strings.Join(temp, ",")
+		}
+	}
+	return onlineMap
+}
+
+func ReadAllConfig() map[string]string {
+	file, err := os.Open(AllDefaultConfigFileName)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	// 先读默认配置, 并保存到一个 map 中
+	rawMap := generateRawMap(file)
+	// 再读出已经载入的配置
+	onlineMap := getOnlineConfig()
+
+	// 用线上配置覆盖默认配置
+	for k, v := range onlineMap {
+		rawMap[k] = v
+	}
+
+	return rawMap
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"github.com/hodis/datastruct/rax"
 	"strings"
 )
 
@@ -36,10 +37,25 @@ func handleCMD(s string) []byte {
 }
 
 func main() {
-
-	//for i, num := range nums {
-	//	member := strconv.Itoa(num)
-		//skList.insert(member, float64(i+1))
-	//}
-	//fmt.Printf("finish")
+	r := rax.NewRax()
+	keys := []string{
+		"abcd",
+		"cd",
+		"XYWZ",
+		"ABCD",
+		//"ABCD",
+		//"abx",
+		//"aby",
+		//"ack",
+		//"acz",
+		//"adl",
+		//"adw",
+	}
+	// todo rax.numele rax.numnodes
+	for i, key := range keys {
+		rax.RaxInsert(r, &key, i)
+		//fmt.Printf("%s\n", key)
+	}
+	rax.RaxShow(r)
+	fmt.Printf("numele: %d\n", r.NumEle)
 }

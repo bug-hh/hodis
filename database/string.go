@@ -331,6 +331,264 @@ func execBitCount(db *DB, args [][]byte) redis.Reply {
 	return protocol.MakeIntReply(int64(bs.BitsCount(start, end)))
 }
 
+//append key value
+func execAppend(db *DB, args [][]byte) redis.Reply {
+	key := string(args[0])
+	bs, errReply := db.getAsString(key)
+	if errReply != nil {
+		return errReply
+	}
+
+	if bs == nil {
+		db.PutEntity(key, &database.DataEntity{Data: args[1]})
+		return protocol.MakeIntReply(int64(len(args[1])))
+	}
+
+	bs = append(bs, args[1]...)
+	db.PutEntity(key, &database.DataEntity{Data: bs})
+	cmdLine := utils.ToCmdLine3("APPEND", args...)
+	db.addAof(cmdLine)
+
+	syncErr := db.cmdSync(cmdLine)
+	if syncErr != nil {
+		logger.Warn("sync command append error ", syncErr.Error())
+	}
+	return protocol.MakeIntReply(int64(len(bs)))
+}
+
+//INCRBYFLOAT key increment
+func execIncrByFloat(db *DB, args [][]byte) redis.Reply {
+	var err error
+	var bs []byte
+	key := string(args[0])
+	bs, err = db.getAsString(key)
+	if err != nil {
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	var num, incrNum float64
+	num, err = strconv.ParseFloat(string(bs), 64)
+	if err != nil {
+		logger.Debug("parse bs error ", err.Error())
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	incrNum, err = strconv.ParseFloat(string(args[1]), 64)
+	if err != nil {
+		logger.Debug("parse incr error ", err.Error())
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	num += incrNum
+	newStr := strconv.FormatFloat(num, 'f', -1, 64)
+	db.PutEntity(key, &database.DataEntity{
+		Data: []byte(newStr),
+	})
+
+	cmdLine := utils.ToCmdLine3("INCRBYFLOAT", args...)
+
+	db.addAof(cmdLine)
+	syncErr := db.cmdSync(cmdLine)
+	if syncErr != nil {
+		logger.Warn("sync command incrbyfloat error ", syncErr.Error())
+	}
+	return protocol.MakeBulkReply([]byte(newStr))
+}
+
+//INCRBY key increment
+func execIncrBy(db *DB, args [][]byte) redis.Reply {
+	var err error
+	var bs []byte
+	key := string(args[0])
+	bs, err = db.getAsString(key)
+	if err != nil {
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	var num, incrNum int64
+	num, err = strconv.ParseInt(string(bs), 10, 64)
+	if err != nil {
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	incrNum, err = strconv.ParseInt(string(args[1]), 10, 64)
+	if err != nil {
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	num += incrNum
+	newStr := strconv.FormatInt(num, 10)
+	db.PutEntity(key, &database.DataEntity{
+		Data: []byte(newStr),
+	})
+
+	cmdLine := utils.ToCmdLine3("INCRBY", args...)
+
+	db.addAof(cmdLine)
+	syncErr := db.cmdSync(cmdLine)
+	if syncErr != nil {
+		logger.Warn("sync command incrbyfloat error ", syncErr.Error())
+	}
+
+	return protocol.MakeBulkReply([]byte(newStr))
+}
+
+func execDecrBy(db *DB, args [][]byte) redis.Reply {
+	var err error
+	var bs []byte
+	key := string(args[0])
+	bs, err = db.getAsString(key)
+	if err != nil {
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	var num, incrNum int64
+	num, err = strconv.ParseInt(string(bs), 10, 64)
+	if err != nil {
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	incrNum, err = strconv.ParseInt(string(args[1]), 10, 64)
+	if err != nil {
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	num -= incrNum
+	newStr := strconv.FormatInt(num, 10)
+	db.PutEntity(key, &database.DataEntity{
+		Data: []byte(newStr),
+	})
+
+	cmdLine := utils.ToCmdLine3("INCRBY", args...)
+
+	db.addAof(cmdLine)
+	syncErr := db.cmdSync(cmdLine)
+	if syncErr != nil {
+		logger.Warn("sync command incrbyfloat error ", syncErr.Error())
+	}
+
+	return protocol.MakeBulkReply([]byte(newStr))
+}
+
+//strlen key
+func execStrlen(db *DB, args [][]byte) redis.Reply {
+	key := string(args[0])
+	bs, err := db.getAsString(key)
+	if err != nil {
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	if bs == nil || len(bs) == 0 {
+		return protocol.MakeIntReply(0)
+	}
+	bsStr := string(bs)
+	return protocol.MakeIntReply(int64(len(bsStr)))
+}
+
+//SETRANGE key offset value
+func execSetRange(db *DB, args [][]byte) redis.Reply {
+	key := string(args[0])
+	value := args[2]
+
+	var offset int64
+	var err error
+
+	offset, err = strconv.ParseInt(string(args[1]), 10, 64)
+	if err != nil {
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	bs, errReply := db.getAsString(key)
+	if errReply != nil {
+		return errReply
+	}
+
+	size := int64(len(bs))
+	var i int64
+	total := offset + int64(len(value))
+	if total <= size {
+		j := 0
+		for i = offset;i<total;i++ {
+			bs[i] = value[j]
+			j++
+		}
+	} else if offset < size && total > size {
+		j := 0
+		for i = offset;i<size;i++ {
+			bs[i] = value[j]
+			j++
+		}
+		bs = append(bs, value[j:]...)
+	} else {
+		bs = append(bs, value...)
+	}
+
+	db.PutEntity(key, &database.DataEntity{Data: bs})
+	cmdLine := utils.ToCmdLine3("SETRANGE", args...)
+	db.addAof(cmdLine)
+
+	syncErr := db.cmdSync(cmdLine)
+	if syncErr != nil {
+		logger.Warn("sync command setrange error, ", syncErr.Error())
+	}
+	return protocol.MakeIntReply(int64(len(bs)))
+}
+
+//GETRANGE key start end
+func execGetRange(db *DB, args [][]byte) redis.Reply {
+	key := string(args[0])
+	var start, end int
+	var err error
+
+	start, err = strconv.Atoi(string(args[1]))
+	if err != nil {
+		return protocol.MakeErrReply("illegal start")
+	}
+
+	end, err = strconv.Atoi(string(args[2]))
+	if err != nil {
+		return protocol.MakeErrReply("illegal end")
+	}
+
+	var bs []byte
+	bs, err = db.getAsString(key)
+	if err != nil {
+		return protocol.MakeErrReply(err.Error())
+	}
+
+	if bs == nil || len(bs) == 0 {
+		return protocol.MakeEmptyMultiBulkReply()
+	}
+	size := len(bs)
+	if start < 0 {
+		if start + size < 0 {
+			start = 0
+		} else {
+			start = size + start
+		}
+	}
+
+	if end < 0 {
+		if end + size < 0 {
+			end = 0
+		} else {
+			end = size + end
+		}
+	} else if end >= size {
+		end = size
+	}
+
+	if start >= end {
+		return protocol.MakeEmptyMultiBulkReply()
+	}
+
+	if end == size {
+		return protocol.MakeBulkReply(bs[start:])
+	}
+
+	return protocol.MakeBulkReply(bs[start:end+1])
+}
+
 func init() {
 	RegisterCommand("Get", execGet, readFirstKey, nil, 2, flagReadOnly)
 	RegisterCommand("Set", execSet, writeFirstKey, rollbackFirstKey, -3, flagWrite)
@@ -342,4 +600,13 @@ func init() {
 	RegisterCommand("GetBit", execGetBit, writeFirstKey, nil, 3, flagReadOnly)
 
 	RegisterCommand("BitCount", execBitCount, readFirstKey, nil, -2, flagReadOnly)
+
+	RegisterCommand("Append", execAppend, writeFirstKey, rollbackFirstKey, 3, flagWrite)
+	RegisterCommand("IncrByFloat", execIncrByFloat, writeFirstKey, rollbackFirstKey, 3, flagWrite)
+	RegisterCommand("IncrBy", execIncrBy, writeFirstKey, rollbackFirstKey, 3, flagWrite)
+	RegisterCommand("DecrBy", execDecrBy, writeFirstKey, rollbackFirstKey, 3, flagWrite)
+
+	RegisterCommand("Strlen", execStrlen, readFirstKey, nil, 2, flagReadOnly)
+	RegisterCommand("SetRange", execSetRange, writeFirstKey, rollbackFirstKey, 4, flagWrite)
+	RegisterCommand("GetRange", execGetRange, readFirstKey, nil, 4, flagReadOnly)
 }

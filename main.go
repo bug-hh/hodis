@@ -70,7 +70,6 @@ func main() {
 		logger.Info("setup config, configFileName: ", configFilename)
 		config.SetupConfig(configFilename)
 		logger.Info("config: ", config.Properties)
-
 	}
 
 	tcpServerConfig := &tcp.Config{

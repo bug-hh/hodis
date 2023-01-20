@@ -350,7 +350,7 @@ func execZCount(db *DB, args [][]byte) redis.Reply {
 	if exclusiveMax {
 		maxStr = maxStr[1:]
 	}
-	
+
 	if !isMinInf {
 		min, err = strconv.ParseFloat(minStr, 64)
 		if err != nil {

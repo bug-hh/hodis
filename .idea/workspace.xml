@@ -6,14 +6,12 @@
   <component name="ChangeListManager">
     <list default="true" id="ca7db3ff-d765-494d-9330-d429c5ccb6d9" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/keys.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/keys.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/rdb.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/rdb.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/config/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/single_db.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/single_db.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/sortedset.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/sortedset.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/string.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/string.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/sys.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/sys.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/datastruct/sortedset/skiplist.go" beforeDir="false" afterPath="$PROJECT_DIR$/datastruct/sortedset/skiplist.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/datastruct/sortedset/sortedset.go" beforeDir="false" afterPath="$PROJECT_DIR$/datastruct/sortedset/sortedset.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/script/probe.go" beforeDir="false" afterPath="$PROJECT_DIR$/script/probe.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -143,12 +141,5 @@
   </component>
   <component name="VgoProject">
     <integration-enabled>true</integration-enabled>
-  </component>
-  <component name="XDebuggerManager">
-    <watches-manager>
-      <configuration name="GoApplicationRunConfiguration">
-        <watch expression="bs[i]" />
-      </configuration>
-    </watches-manager>
   </component>
 </project>

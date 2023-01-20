@@ -109,6 +109,8 @@ func (db *DB) Exec(c redis.Connection, cmdLine [][]byte) redis.Reply {
 			return protocol.MakeArgNumErrReply(cmdName)
 		}
 		return Watch(db, c, cmdLine[1:])
+	} else if cmdName == "config" {
+		return execConfig(db, cmdLine[1:])
 	}
 	// 执行事务
 	if c != nil && c.InMultiState() {
