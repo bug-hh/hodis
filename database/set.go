@@ -53,9 +53,11 @@ func execSAdd(db *DB, args [][]byte) redis.Reply {
 	}
 	cmdLines := utils.ToCmdLine3("SADD", args...)
 	db.addAof(cmdLines)
-	syncErr := db.cmdSync(cmdLines)
-	if syncErr != nil {
-		logger.Warn("sync command `SADD` to slave failed: ", syncErr)
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(cmdLines)
+		if syncErr != nil {
+			logger.Warn("sync command `SADD` to slave failed: ", syncErr)
+		}
 	}
 	return protocol.MakeIntReply(int64(res))
 }
@@ -178,6 +180,14 @@ func execSPop(db *DB, args [][]byte) redis.Reply {
 		ret = append(ret, []byte(memberStr))
 		set.Remove(memberStr)
 	}
+	cmdLines := utils.ToCmdLine3("SPOP", args...)
+	db.addAof(cmdLines)
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(cmdLines)
+		if syncErr != nil {
+			logger.Warn("sync command `SPOP` to slave failed: ", syncErr)
+		}
+	}
 
 	return protocol.MakeMultiBulkReply(ret)
 }
@@ -219,6 +229,15 @@ func execSRem(db *DB, args [][]byte) redis.Reply {
 	for _, member := range members {
 		if set.Remove(string(member)) {
 			ret++
+		}
+	}
+
+	cmdLines := utils.ToCmdLine3("SREM", args...)
+	db.addAof(cmdLines)
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(cmdLines)
+		if syncErr != nil {
+			logger.Warn("sync command `SREM` to slave failed: ", syncErr)
 		}
 	}
 

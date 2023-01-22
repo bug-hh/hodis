@@ -148,7 +148,6 @@ func (db *DB) execNormalCommand(cmdLine [][]byte) redis.Reply {
 	if !validateArity(cmd.arity, cmdLine) {
 		return protocol.MakeArgNumErrReply(cmdName)
 	}
-
 	prepare := cmd.prepare
 	/*
 	获取一个事务内所有的写命令和读命令的 key

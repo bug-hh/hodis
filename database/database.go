@@ -58,10 +58,6 @@ func NewStandaloneServer() *MultiDB {
 	for i := range mdb.dbSet {
 		singleDB := MakeDB()
 		singleDB.index = i
-		// 初始化一个空实现，保证调用不出错
-		singleDB.cmdSync = func(line CmdLine) error {
-			return nil
-		}
 		holder := &atomic.Value{}
 		holder.Store(singleDB)
 		mdb.dbSet[i] = holder
@@ -104,10 +100,20 @@ func NewStandaloneServer() *MultiDB {
 	}
 
 	//初始化 slow log 配置
-	mdb.slowLogLogSlowerThan = config.Properties.SlowLogLogSlowerThan
+	if config.Properties.SlowLogLogSlowerThan > 0 {
+		mdb.slowLogLogSlowerThan = config.Properties.SlowLogLogSlowerThan
+	} else {
+		mdb.slowLogLogSlowerThan = 5
+	}
+
 	mdb.slowLogList = list.Make()
+	//mdb.slowLogList = list.NewLinkedList()
 	mdb.slowLogEntryId = 0
-	mdb.slowLogMaxLen = config.Properties.SlowLogMaxLen
+	if config.Properties.SlowLogMaxLen > 0 {
+		mdb.slowLogMaxLen = config.Properties.SlowLogMaxLen
+	} else {
+		mdb.slowLogMaxLen = 100
+	}
 
 	// 主从模式复制
 	mdb.replication = initReplStatus()
@@ -178,9 +184,9 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	}()
 
 	cmdName := strings.ToLower(string(cmdLine[0]))
-	if cmdName != "ping" && cmdName != "replconf" {
-		logger.Info("MultiDB cmdName: ", cmdName)
-	}
+	//if cmdName != "ping" && cmdName != "replconf" {
+	//	logger.Info("MultiDB cmdName: ", cmdName)
+	//}
 
 	if cmdName == "monitor" {
 		// 服务器收到这个消息后，把对应 client 连接加入 monitors 链表
@@ -218,12 +224,8 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 					continue
 				}
 				singleDB.cmdSync = func(line CmdLine) (ret error) {
-					logger.Info("xxx sync")
 					// 只有自己是 master，才有资格向 slave 传播写命令
 					if atomic.LoadInt32(&mdb.role) == MasterRole {
-						keyCommand := string(line[0])
-						logger.Info("command sync key: ", keyCommand)
-						// todo 这里应该循环遍历所有的 salve connection
 						for _, cc := range mdb.slaves {
 							syncReq := protocol.MakeMultiBulkReply(line)
 							ret = cc.Write(syncReq.ToBytes())
@@ -353,6 +355,7 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	cmdReply := selectDB.Exec(c, cmdLine)
 	// 记录下命令结束执行时间
 	endTime := time.Now()
+	// todo 不加 go 比 加 go 处理效率更高，可以考虑使用 pprof 在两种不同情况下，查查调度器的情况
 	mdb.handleSlowLog(startTime.UnixMicro(), endTime.UnixMicro(), cmdLine)
 
 	return cmdReply
@@ -385,11 +388,14 @@ func CanExecWriteCmd(db *MultiDB, conn *connection.Connection, cmdName string) b
 	writeCmds := []string{
 		"set", "mset", "lpush", "rpush", "lpop", "rpop", "zadd", "zrem",
 	}
-	for _, cmd := range writeCmds {
-		return !(cmdName == cmd && atomic.LoadInt32(&db.role) == SlaveRole && conn.GetRole() != connection.ReplicationRecvCli)
+	writeMap := make(map[string]bool)
+	for _, writeCmd := range writeCmds {
+		writeMap[writeCmd] = true
 	}
-	return true
+	_, exists := writeMap[strings.ToLower(cmdName)]
+	return !(exists && atomic.LoadInt32(&db.role) == SlaveRole && conn.GetRole() != connection.ReplicationRecvCli)
 }
+
 func SaveAndSendRDB(db *MultiDB, conn redis.Connection) {
 	BGSaveRDB(db)
 	err := sendRDBFile(conn)

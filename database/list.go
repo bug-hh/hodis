@@ -379,6 +379,15 @@ func execLInsert(db *DB, args [][]byte) redis.Reply {
 	} else {
 		ls.Insert(index, element)
 	}
+	db.addAof(utils.ToCmdLine3("linsert", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("linsert", args...))
+		if syncErr != nil {
+			logger.Warn("sync linsert to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeIntReply(int64(ls.Len()))
 }
 
@@ -427,6 +436,16 @@ func execLRem(db *DB, args [][]byte) redis.Reply {
 		bs := a.([]byte)
 		return utils.BytesEquals(bs, element)
 	}, count)
+
+	db.addAof(utils.ToCmdLine3("lrem", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("lrem", args...))
+		if syncErr != nil {
+			logger.Warn("sync lrem to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeIntReply(int64(ret))
 }
 
@@ -492,6 +511,16 @@ func execLTrim(db *DB, args [][]byte) redis.Reply {
 
 	// 移除 [start, stop] 以外的元素
 	ls.Trim(start, stop)
+
+	db.addAof(utils.ToCmdLine3("ltrim", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("ltrim", args...))
+		if syncErr != nil {
+			logger.Warn("sync ltrim to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeOkReply()
 }
 
@@ -570,6 +599,16 @@ func execLSet(db *DB, args [][]byte) redis.Reply {
 	}
 	element := args[2]
 	ls.Set(index, element)
+
+	db.addAof(utils.ToCmdLine3("LSET", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("LSET", args...))
+		if syncErr != nil {
+			logger.Warn("sync LSET to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeOkReply()
 }
 

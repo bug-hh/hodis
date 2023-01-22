@@ -9,6 +9,7 @@ import (
 	"github.com/hodis/interface/tcp"
 	"github.com/hodis/lib/logger"
 	"net"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"sync"
@@ -36,6 +37,14 @@ func ListenAndServeWithSignal(cfg *Config, handler tcp.Handler) error {
 			closeChan <- struct {}{}
 		}
 	}()
+
+	// 启动 pprof，用于性能测试分析
+	// 只在单机模式下打开, 如果不需要排查性能问题，单机模式下也可以注释掉代码
+	//if config.Properties.ServerMode == config.STANDALONE {
+	//	go func() {
+	//		fmt.Println(http.ListenAndServe("localhost:6060", nil))
+	//	}()
+	//}
 
 	listener, err := net.Listen("tcp", cfg.Address)
 	if err != nil {
@@ -74,14 +83,14 @@ func ListenAndServe(listener net.Listener, handler tcp.Handler, closeChan <-chan
 		if err != nil {
 			break
 		}
-		logger.Info("accept link")
+		//logger.Info("accept link")
 		waitDone.Add(1)
 		// 每收到一个客户端连接，就开一个协程来处理
 		go func() {
 			defer func() {
 				waitDone.Done()
 			}()
-			logger.Info("开始处理连接: ", conn.RemoteAddr().String())
+			//logger.Info("开始处理连接: ", conn.RemoteAddr().String())
 			handler.Handle(ctx, conn)
 		}()
 	}

@@ -1,9 +1,12 @@
 package list
 
+import "sync"
+
 type LinkedList struct {
 	first *node
 	last *node
 	size int
+	mutex sync.RWMutex
 }
 
 type node struct {
@@ -13,6 +16,9 @@ type node struct {
 }
 
 func (list *LinkedList) Add(val interface{}) {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
+
 	if list == nil {
 		panic("list is nil")
 	}
@@ -56,6 +62,8 @@ func (list *LinkedList) ForEach(consumer Consumer) {
 }
 
 func (list LinkedList) Contains(expected Expected) bool {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
 	contains := false
 	list.ForEach(func(i int, v interface{}) bool {
 		if expected(v) {
@@ -69,6 +77,8 @@ func (list LinkedList) Contains(expected Expected) bool {
 
 // Len returns the number of elements in list
 func (list *LinkedList) Len() int {
+	list.mutex.RLock()
+	defer list.mutex.RUnlock()
 	if list == nil {
 		panic("list is nil")
 	}
@@ -76,6 +86,8 @@ func (list *LinkedList) Len() int {
 }
 
 func (list *LinkedList) RemoveFirst() {
+	list.mutex.Lock()
+	defer list.mutex.Unlock()
 	if list.first == nil || list.size == 0 {
 		return
 	}

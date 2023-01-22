@@ -114,7 +114,7 @@ func execZAdd(db *DB, args [][]byte) redis.Reply {
 	} else if isLT {
 		scoreUpdatePolicy = utils.SORTED_SET_UPDATE_LESS_THAN
 	}
-	logger.Info("scoreStartIndex: ", scoreStartIndex)
+	//logger.Info("scoreStartIndex: ", scoreStartIndex)
 	if scoreStartIndex == -1 {
 		return protocol.MakeSyntaxErrReply()
 	}
@@ -124,15 +124,15 @@ func execZAdd(db *DB, args [][]byte) redis.Reply {
 	if isINCR && size != 1 {
 		return protocol.MakeErrReply("INCR option supports a single increment-element pair")
 	}
-	logger.Info("size: ", size)
-	logger.Info("elementsArgs: ", elementsArgs)
+	//logger.Info("size: ", size)
+	//logger.Info("elementsArgs: ", elementsArgs)
 	elements := make([]*sortedset.Element, size)
 	for i:=0;i<size;i++ {
 		scoreValue := elementsArgs[2*i]
 		member := string(elementsArgs[2*i+1])
 		score, err := strconv.ParseFloat(string(scoreValue), 64)
-		logger.Info("member: ", member)
-		logger.Info("score: ", score)
+		//logger.Info("member: ", member)
+		//logger.Info("score: ", score)
 		if err != nil {
 			return protocol.MakeErrReply("ERR value is not a valid float")
 		}
@@ -152,8 +152,8 @@ func execZAdd(db *DB, args [][]byte) redis.Reply {
 	for _, e := range elements {
 		if sortedSet.Add(e.Member, e.Score, policy, scoreUpdatePolicy, isCH, isINCR) {
 			i++
-			logger.Debug("add member: ", e.Member)
-			logger.Debug("add score: ", e.Score)
+			//logger.Debug("add member: ", e.Member)
+			//logger.Debug("add score: ", e.Score)
 		}
 	}
 
@@ -521,6 +521,16 @@ func execZDiffStore(db *DB, args [][]byte) redis.Reply {
 	ret := firstKeySet.Diff(destSet)
 	db.PutEntity(destKey, &database.DataEntity{Data: ret})
 
+	db.addAof(utils.ToCmdLine3("zdiffstore", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("zdiffstore", args...))
+		if syncErr != nil {
+			logger.Warn("sync zdiffstore to slave failed: ", syncErr)
+		}
+	}
+
 	return protocol.MakeIntReply(ret.Len())
 }
 
@@ -604,11 +614,17 @@ func execZIncrBy(db *DB, args [][]byte) redis.Reply {
 	} else {
 		result = increment + element.Score
 	}
-	logger.Info("member: ", member)
-	logger.Info("increment: ", increment)
-	logger.Info("isIncr: ", isIncr)
-	logger.Info("exists: ", exists)
 	zset.Add(member, increment, utils.UpsertPolicy, utils.SORTED_SET_UPDATE_ALL, false, isIncr)
+
+	db.addAof(utils.ToCmdLine3("ZINCRBY", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("ZINCRBY", args...))
+		if syncErr != nil {
+			logger.Warn("sync ZINCRBY to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeStatusReply(strconv.FormatFloat(result, 'f', -1, 64))
 }
 
@@ -708,6 +724,16 @@ func execZUnionStore(db *DB, args [][]byte) redis.Reply {
 	ret := sortedset.Unions(sets, weights, aggregate)
 	db.PutEntity(destKey, &database.DataEntity{Data: ret})
 
+	db.addAof(utils.ToCmdLine3("ZUNIONSTORE", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("ZUNIONSTORE", args...))
+		if syncErr != nil {
+			logger.Warn("sync ZUNIONSTORE to slave failed: ", syncErr)
+		}
+	}
+
 	return protocol.MakeIntReply(ret.Len())
 }
 
@@ -802,6 +828,16 @@ func execZInterStore(db *DB, args [][]byte) redis.Reply {
 	ret := sortedset.Intersects(sets, weights, aggregate)
 
 	db.PutEntity(destKey, &database.DataEntity{Data: ret})
+
+	db.addAof(utils.ToCmdLine3("ZINTERSTORE", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("ZINTERSTORE", args...))
+		if syncErr != nil {
+			logger.Warn("sync ZINTERSTORE to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeIntReply(ret.Len())
 }
 

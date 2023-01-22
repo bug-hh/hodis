@@ -42,6 +42,7 @@ func main() {
 	var configFilename = ""
 	isSentinel := false
 	// 如果用户在命令行指定了配置文件，就优先读命令行
+	logger.Debug("len(os.Args): ", len(os.Args))
 	if len(os.Args) == 2 {
 		configFilename = os.Args[1]
 	} else if len(os.Args) == 3  && os.Args[2] == "--sentinel" {

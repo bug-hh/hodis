@@ -10,6 +10,12 @@ import (
 	"strings"
 )
 
+const (
+	CLUSTER_MODE = iota
+	STANDALONE
+	SENTINEL
+)
+
 type ServerProperties struct {
 	Bind string `cfg:"bind"`
 	Port int `cfg:"port"`
@@ -33,6 +39,8 @@ type ServerProperties struct {
 
 	//Sentinel *sentinel.SentinelState
 	Sentinel map[string]map[string]interface{}
+
+	ServerMode int
 }
 
 // Properties holds global config properties
@@ -46,6 +54,8 @@ func init() {
 		AppendOnly: false,
 		SlowLogLogSlowerThan: -1,
 		Sentinel: make(map[string]map[string]interface{}),
+		// 默认单机模式
+		ServerMode: STANDALONE,
 	}
 }
 
@@ -122,6 +132,20 @@ func parse(src io.Reader) *ServerProperties {
 				if field.Type.Elem().Kind() == reflect.String {
 					slice := strings.Split(value, ",")
 					fieldVal.Set(reflect.ValueOf(slice))
+				}
+			}
+		} else {
+			slowKey := strings.ToLower(key)
+			switch field.Type.Kind() {
+			case reflect.Int64:
+				// 如果用户没有指定慢查询日志选项，那么设置为 -1，表示不进行慢查询日志记录
+				if slowKey == "slowlog-log-slower-than" {
+					fieldVal.SetInt(-1)
+				}
+			case reflect.Int:
+				// 如果用户没有指定慢查询日志选项，那么设置为 -1，表示不进行慢查询日志记录
+				if slowKey == "slowlog-max-len" {
+					fieldVal.SetInt(-1)
 				}
 			}
 		}

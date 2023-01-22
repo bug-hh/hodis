@@ -51,6 +51,8 @@ func execConfig(db *DB, args [][]byte) redis.Reply {
 				_, exists := allConfig[paraStr]
 				if exists {
 					ret = append(ret, []byte(paraStr), []byte(allConfig[paraStr]))
+				} else {
+					ret = append(ret, []byte(paraStr), []byte(""))
 				}
 			}
 		}

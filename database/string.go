@@ -163,7 +163,6 @@ func execSet(db *DB, args [][]byte) redis.Reply {
 	// 如果是主从模式，master 将 set 命令发送给 slave
 	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
 	if db.cmdSync != nil {
-		logger.Info("set sync")
 		syncErr := db.cmdSync(utils.ToCmdLine3("set", args...))
 		if syncErr != nil {
 			logger.Warn("sync command to slave failed: ", syncErr)
@@ -275,6 +274,15 @@ func execSetBit(db *DB, args [][]byte) redis.Reply {
 	}
 	bs.SetBits(offset, value)
 	db.PutEntity(key, &database.DataEntity{Data: bs})
+	db.addAof(utils.ToCmdLine3("setbits", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("setbits", args...))
+		if syncErr != nil {
+			logger.Warn("sync setbits to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeIntReply(int64(oldValue))
 }
 
@@ -348,11 +356,13 @@ func execAppend(db *DB, args [][]byte) redis.Reply {
 	db.PutEntity(key, &database.DataEntity{Data: bs})
 	cmdLine := utils.ToCmdLine3("APPEND", args...)
 	db.addAof(cmdLine)
-
-	syncErr := db.cmdSync(cmdLine)
-	if syncErr != nil {
-		logger.Warn("sync command append error ", syncErr.Error())
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(cmdLine)
+		if syncErr != nil {
+			logger.Warn("sync command append error ", syncErr.Error())
+		}
 	}
+
 	return protocol.MakeIntReply(int64(len(bs)))
 }
 
@@ -388,9 +398,11 @@ func execIncrByFloat(db *DB, args [][]byte) redis.Reply {
 	cmdLine := utils.ToCmdLine3("INCRBYFLOAT", args...)
 
 	db.addAof(cmdLine)
-	syncErr := db.cmdSync(cmdLine)
-	if syncErr != nil {
-		logger.Warn("sync command incrbyfloat error ", syncErr.Error())
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(cmdLine)
+		if syncErr != nil {
+			logger.Warn("sync command incrbyfloat error ", syncErr.Error())
+		}
 	}
 	return protocol.MakeBulkReply([]byte(newStr))
 }
@@ -423,11 +435,12 @@ func execIncrBy(db *DB, args [][]byte) redis.Reply {
 	})
 
 	cmdLine := utils.ToCmdLine3("INCRBY", args...)
-
 	db.addAof(cmdLine)
-	syncErr := db.cmdSync(cmdLine)
-	if syncErr != nil {
-		logger.Warn("sync command incrbyfloat error ", syncErr.Error())
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(cmdLine)
+		if syncErr != nil {
+			logger.Warn("sync command INCRBY error ", syncErr.Error())
+		}
 	}
 
 	return protocol.MakeBulkReply([]byte(newStr))
@@ -459,14 +472,14 @@ func execDecrBy(db *DB, args [][]byte) redis.Reply {
 		Data: []byte(newStr),
 	})
 
-	cmdLine := utils.ToCmdLine3("INCRBY", args...)
-
+	cmdLine := utils.ToCmdLine3("DECRBY", args...)
 	db.addAof(cmdLine)
-	syncErr := db.cmdSync(cmdLine)
-	if syncErr != nil {
-		logger.Warn("sync command incrbyfloat error ", syncErr.Error())
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(cmdLine)
+		if syncErr != nil {
+			logger.Warn("sync command DECRBY error ", syncErr.Error())
+		}
 	}
-
 	return protocol.MakeBulkReply([]byte(newStr))
 }
 
@@ -526,10 +539,11 @@ func execSetRange(db *DB, args [][]byte) redis.Reply {
 	db.PutEntity(key, &database.DataEntity{Data: bs})
 	cmdLine := utils.ToCmdLine3("SETRANGE", args...)
 	db.addAof(cmdLine)
-
-	syncErr := db.cmdSync(cmdLine)
-	if syncErr != nil {
-		logger.Warn("sync command setrange error, ", syncErr.Error())
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(cmdLine)
+		if syncErr != nil {
+			logger.Warn("sync command setrange error, ", syncErr.Error())
+		}
 	}
 	return protocol.MakeIntReply(int64(len(bs)))
 }

@@ -4,6 +4,7 @@ import (
 	dictPackage "github.com/hodis/datastruct/dict"
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
+	"github.com/hodis/lib/logger"
 	"github.com/hodis/lib/utils"
 	"github.com/hodis/redis/protocol"
 	"github.com/shopspring/decimal"
@@ -54,6 +55,14 @@ func execHSet(db *DB, args [][]byte) redis.Reply {
 
 	result := dict.Put(field, value)
 	db.addAof(utils.ToCmdLine3("hset", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("hset", args...))
+		if syncErr != nil {
+			logger.Warn("sync hset to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeIntReply(int64(result))
 }
 
@@ -113,6 +122,14 @@ func execHSetNX(db *DB, args [][]byte) redis.Reply {
 	result := dt.PutIfAbsent(field, value)
 	if result > 0 {
 		db.addAof(utils.ToCmdLine3("hsetnx", args...))
+		// 如果是主从模式，master 将 set 命令发送给 slave
+		// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+		if db.cmdSync != nil {
+			syncErr := db.cmdSync(utils.ToCmdLine3("hsetnx", args...))
+			if syncErr != nil {
+				logger.Warn("sync hsetnx to slave failed: ", syncErr)
+			}
+		}
 	}
 	return protocol.MakeIntReply(int64(result))
 }
@@ -143,6 +160,14 @@ func execHDel(db *DB, args [][]byte) redis.Reply {
 
 	if deleted > 0 {
 		db.addAof(utils.ToCmdLine3("hdel", args...))
+		// 如果是主从模式，master 将 set 命令发送给 slave
+		// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+		if db.cmdSync != nil {
+			syncErr := db.cmdSync(utils.ToCmdLine3("hdel", args...))
+			if syncErr != nil {
+				logger.Warn("sync hdel to slave failed: ", syncErr)
+			}
+		}
 	}
 	return protocol.MakeIntReply(int64(deleted))
 }
@@ -211,6 +236,14 @@ func execHMSet(db *DB, args [][]byte) redis.Reply {
 		dt.Put(field, value)
 	}
 	db.addAof(utils.ToCmdLine3("hmset", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("hmset", args...))
+		if syncErr != nil {
+			logger.Warn("sync hmset to slave failed: ", syncErr)
+		}
+	}
 	return &protocol.OkReply{}
 }
 
@@ -336,6 +369,14 @@ func execHIncrBy(db *DB, args [][]byte) redis.Reply {
 	if !exists {
 		dt.Put(field, args[2])
 		db.addAof(utils.ToCmdLine3("hincrby", args...))
+		// 如果是主从模式，master 将 set 命令发送给 slave
+		// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+		if db.cmdSync != nil {
+			syncErr := db.cmdSync(utils.ToCmdLine3("hincrby", args...))
+			if syncErr != nil {
+				logger.Warn("sync hincrby to slave failed: ", syncErr)
+			}
+		}
 		return protocol.MakeBulkReply(args[2])
 	}
 
@@ -347,6 +388,14 @@ func execHIncrBy(db *DB, args [][]byte) redis.Reply {
 	bytes := []byte(strconv.FormatInt(val, 10))
 	dt.Put(field, bytes)
 	db.addAof(utils.ToCmdLine3("hincrby", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("hincrby", args...))
+		if syncErr != nil {
+			logger.Warn("sync hincrby to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeBulkReply(bytes)
 }
 
@@ -384,6 +433,14 @@ func execHIncrByFloat(db *DB, args [][]byte) redis.Reply {
 	resultBytes := []byte(result.String())
 	dt.Put(field, resultBytes)
 	db.addAof(utils.ToCmdLine3("hincrbyfloat", args...))
+	// 如果是主从模式，master 将 set 命令发送给 slave
+	// 这是一个从外部传入的回调函数, 只有 master 节点才能执行，只有 master 节点会初始化 cmdSync 字段
+	if db.cmdSync != nil {
+		syncErr := db.cmdSync(utils.ToCmdLine3("hincrbyfloat", args...))
+		if syncErr != nil {
+			logger.Warn("sync hincrbyfloat to slave failed: ", syncErr)
+		}
+	}
 	return protocol.MakeBulkReply(resultBytes)
 }
 

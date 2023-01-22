@@ -396,8 +396,8 @@ func (mdb *MultiDB) doFullSync(reply *protocol.StatusReply) error {
 		return errors.New("get illegal repl offset: " + headers[2])
 	}
 
-	logger.Info("full resync from master: " + mdb.replication.replId)
-	logger.Info("current offset:", mdb.replication.replOffset)
+	//logger.Info("full resync from master: " + mdb.replication.replId)
+	//logger.Info("current offset:", mdb.replication.replOffset)
 
 	for i, h := range rdbHolder.dbSet {
 		newDB := h.Load().(*DB)
@@ -438,7 +438,7 @@ func (mdb *MultiDB) sendAndJudgePsync(psyncCmd [][]byte) (int, *protocol.StatusR
 
 // 主从模式，命令传播，slave 从 master 那获取写命令，然后在本地执行
 func (mdb *MultiDB) receiveAOF() error {
-	logger.Info("receiveAOF, addr: ", mdb.replication.masterConn.RemoteAddr())
+	//logger.Info("receiveAOF, addr: ", mdb.replication.masterConn.RemoteAddr())
 	conn := connection.NewConn(mdb.replication.masterConn)
 	conn.SetRole(connection.ReplicationRecvCli)
 	mdb.replication.mutex.Lock()
@@ -451,12 +451,11 @@ func (mdb *MultiDB) receiveAOF() error {
 
 	mdb.replication.running.Add(1)
 	defer mdb.replication.running.Done()
-	logger.Info("enter for")
 	for {
 		select {
 		case payload := <-mdb.replication.masterChan:
 			if payload.Err != nil {
-				logger.Info("receiveAOF, payload error, ", payload.Err)
+				//logger.Info("receiveAOF, payload error, ", payload.Err)
 				return payload.Err
 			}
 
@@ -467,23 +466,23 @@ func (mdb *MultiDB) receiveAOF() error {
 
 			cmdLine, bulkOk := payload.Data.(*protocol.MultiBulkReply)
 			if !bulkOk {
-				logger.Info("unexpected payload: " + string(payload.Data.ToBytes()))
+				//logger.Info("unexpected payload: " + string(payload.Data.ToBytes()))
 				return errors.New("unexpected payload: " + string(payload.Data.ToBytes()))
 			}
-			logger.Info("receiveAOF payload: ", string(cmdLine.Args[0]))
+			//logger.Info("receiveAOF payload: ", string(cmdLine.Args[0]))
 			mdb.replication.mutex.Lock()
 			if mdb.replication.modCount != modCount {
 				return nil
 			}
 			mdb.Exec(conn, cmdLine.Args)
 			// todo: directly get size from socket
-			n := len(cmdLine.ToBytes())
+			//n := len(cmdLine.ToBytes())
 			mdb.replication.replOffset++
-			logger.Info(fmt.Sprintf("receive %d bytes from master, current offset %d",
-				n, mdb.replication.replOffset))
+			//logger.Info(fmt.Sprintf("receive %d bytes from master, current offset %d",
+			//	n, mdb.replication.replOffset))
 			mdb.replication.mutex.Unlock()
 		case <-done:
-			logger.Info("receiveAOF done")
+			//logger.Info("receiveAOF done")
 			return nil
 		}
 	}

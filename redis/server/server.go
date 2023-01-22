@@ -31,16 +31,18 @@ var (
 
 func MakeHandler() *Handler {
 	var db database.DB
-	logger.Info("MakeHandler len(config.Properties.Sentinel): ", len(config.Properties.Sentinel))
 	if config.Properties.Self != "" && len(config.Properties.Peers) > 0 {
 		logger.Info("开启集群模式")
 		db = cluster.MakeCluster()
+		config.Properties.ServerMode = config.CLUSTER_MODE
 	} else if len(config.Properties.Sentinel) > 0 {
 		logger.Info("开启 sentinel 模式")
 		db = sentinel.NewSentinelServer()
+		config.Properties.ServerMode = config.SENTINEL
 	} else {
 		logger.Info("开启单机模式")
 		db = database2.NewStandaloneServer()
+		config.Properties.ServerMode = config.STANDALONE
 	}
 	return &Handler{
 		db: db,
@@ -56,7 +58,7 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 
 	client := connection.NewConn(conn)
 	h.activeConn.Store(client, 1)
-	logger.Info("开始解析 stream")
+	//logger.Info("开始解析 stream")
 	ch := parser.ParseStream(conn)
 	for payload := range ch {
 		if payload.Err != nil {
@@ -65,7 +67,6 @@ func (h *Handler) Handle(ctx context.Context, conn net.Conn) {
 				payload.Err == io.ErrUnexpectedEOF ||
 				strings.Contains(payload.Err.Error(), "use of closed network connection") {
 				h.closeClient(client)
-				logger.Info("connection closed: " + client.RemoteAddr().String())
 				return
 			}
 			// protocol err
@@ -109,7 +110,7 @@ func (h *Handler) closeClient(client *connection.Connection) {
 
 // Close stops handler
 func (h *Handler) Close() error {
-	logger.Info("handler shutting down...")
+	//logger.Info("handler shutting down...")
 	h.closing.Set(true)
 	// TODO: concurrent wait
 	h.activeConn.Range(func(key interface{}, val interface{}) bool {
