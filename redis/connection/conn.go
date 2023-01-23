@@ -24,6 +24,7 @@ type Connection struct {
 	mu sync.Mutex
 
 	subs map[string]bool
+	psubs map[string]bool
 
 	password string
 
@@ -68,6 +69,26 @@ func (c *Connection) Write(b []byte) error {
 	return err
 }
 
+func (c *Connection) PSubscribe(channel string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.psubs == nil {
+		c.psubs = make(map[string]bool)
+	}
+	c.psubs[channel] = true
+}
+
+func (c *Connection) PUnSubscribe(channel string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.psubs) == 0 {
+		return
+	}
+	delete(c.psubs, channel)
+}
+
 func (c *Connection) Subscribe(channel string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -95,6 +116,9 @@ func (c *Connection) SubsCount() int {
 	return len(c.subs)
 }
 
+func (c *Connection) PSubsCount() int {
+	return len(c.psubs)
+}
 
 // GetChannels returns all subscribing channels
 func (c *Connection) GetChannels() []string {

@@ -169,8 +169,8 @@ func (s *SentinelServer) receiveMasterResp() {
 			}
 		}
 	}()
-
 }
+
 func (s *SentinelServer) startSentinelCron() {
 	go func() {
 		defer func() {

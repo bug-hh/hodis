@@ -61,7 +61,7 @@ func (list *LinkedList) ForEach(consumer Consumer) {
 	}
 }
 
-func (list LinkedList) Contains(expected Expected) bool {
+func (list *LinkedList) Contains(expected Expected) bool {
 	list.mutex.Lock()
 	defer list.mutex.Unlock()
 	contains := false
@@ -98,5 +98,38 @@ func (list *LinkedList) RemoveFirst() {
 	}
 
 	list.first = next
+	list.size--
+}
+
+func (list *LinkedList) Get(expected Expected) *node {
+	if list == nil {
+		panic("list is nil")
+	}
+	n := list.first
+	for n != nil {
+		if expected(n.val) {
+			return n
+		}
+		n = n.next
+	}
+	return nil
+}
+
+func (list *LinkedList) Remove(n *node) {
+	if n == nil {
+		return
+	}
+	if list.size == 1 {
+		list.first = nil
+		list.last = nil
+	}
+	// 表示要移除的元素是队头
+	if n.prev == nil {
+		list.RemoveFirst()
+		return
+	} else {
+		n.prev.next = n.next
+		n.next.prev = n.prev
+	}
 	list.size--
 }

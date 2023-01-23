@@ -214,8 +214,8 @@ func (dict *ConcurrentDict) Keys() []string {
 	i := 0
 	dict.ForEach(func(key string, val interface{}) bool {
 		if i < len(keys) {
-			i++
 			keys[i] = key
+			i++
 		} else {
 			keys = append(keys, key)
 		}

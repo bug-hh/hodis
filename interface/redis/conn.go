@@ -9,7 +9,12 @@ type Connection interface {
 	// client should keep its subscribing channels
 	Subscribe(channel string)
 	UnSubscribe(channel string)
+
+	PSubscribe(channel string)
+	PUnSubscribe(channel string)
+
 	SubsCount() int
+	PSubsCount() int
 	GetChannels() []string
 
 	// used for `Multi` command

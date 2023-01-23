@@ -9,6 +9,8 @@ import (
 type Hub struct {
 	// channel -> list(*Client)
 	subs dict.Dict
+	// pattern -> list(*Client)
+	patternSubs dict.Dict
 	// lock channel
 	subsLocker *lock.Locks
 }
@@ -17,6 +19,7 @@ type Hub struct {
 func MakeHub() *Hub {
 	return &Hub{
 		subs:       dict.MakeConcurrent(4),
+		patternSubs: dict.MakeConcurrent(4),
 		subsLocker: lock.Make(16),
 	}
 }

@@ -6,26 +6,15 @@
   <component name="ChangeListManager">
     <list default="true" id="ca7db3ff-d765-494d-9330-d429c5ccb6d9" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/config/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/database.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/hash.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/hash.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/list.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/list.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/replication.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/replication.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/set.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/set.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/single_db.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/single_db.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/sortedset.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/sortedset.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/string.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/string.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/database/sys.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/sys.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/datastruct/dict/concurrent_map.go" beforeDir="false" afterPath="$PROJECT_DIR$/datastruct/dict/concurrent_map.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/datastruct/list/linked.go" beforeDir="false" afterPath="$PROJECT_DIR$/datastruct/list/linked.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hodis_master.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_master.conf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hodis_slave_1.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_slave_1.conf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hodis_slave_2.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_slave_2.conf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hodis_slave_3.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_slave_3.conf" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/parser/parser.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/parser/parser.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/server/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/server/server.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_cluster.sh" beforeDir="false" afterPath="$PROJECT_DIR$/run_cluster.sh" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tcp/server.go" beforeDir="false" afterPath="$PROJECT_DIR$/tcp/server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis_sentinel.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_sentinel.conf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/interface/redis/conn.go" beforeDir="false" afterPath="$PROJECT_DIR$/interface/redis/conn.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pubsub/hub.go" beforeDir="false" afterPath="$PROJECT_DIR$/pubsub/hub.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pubsub/pubsub.go" beforeDir="false" afterPath="$PROJECT_DIR$/pubsub/pubsub.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/connection/conn.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/connection/conn.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sentinel/sentinel_server.go" beforeDir="false" afterPath="$PROJECT_DIR$/sentinel/sentinel_server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -60,15 +49,15 @@
     <property name="go.import.settings.migrated" value="true" />
     <property name="go.sdk.automatically.set" value="true" />
     <property name="go.tried.to.enable.integration.vgo.integrator" value="true" />
-    <property name="last_opened_file_path" value="$PROJECT_DIR$/redis-sentinel-test" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$" />
   </component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
       <recent name="$PROJECT_DIR$/redis-sentinel-test" />
       <recent name="$PROJECT_DIR$/redis-sentinel-test/30002" />
       <recent name="$PROJECT_DIR$/redis-sentinel-test/30001" />
       <recent name="$PROJECT_DIR$/redis-sentinel-test/30000" />
-      <recent name="$PROJECT_DIR$/redis/client" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/redis" />

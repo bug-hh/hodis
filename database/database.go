@@ -320,12 +320,34 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	} else if cmdName == "bgsave" {
 		return BGSaveRDB(mdb)
 	} else if cmdName == "subscribe" {
-		if len(cmdLine) != 2 {
+		// SUBSCRIBE channel [channel ...]
+		if len(cmdLine) < 2 {
 			return protocol.MakeArgNumErrReply("subscribe")
 		}
 		return pubsub.Subscribe(mdb.hub, c, cmdLine[1:])
 	} else if cmdName == "publish" {
+		logger.Debug("cmdName: publish")
 		return pubsub.Publish(mdb.hub, cmdLine[1:])
+	} else if cmdName == "psubscribe" {
+		// PSUBSCRIBE pattern [pattern ...]
+		if len(cmdLine) < 2 {
+			return protocol.MakeArgNumErrReply("psubscribe")
+		}
+		return pubsub.PSubscribe(mdb.hub, c, cmdLine[1:])
+	} else if cmdName == "unsubscribe" {
+		//UNSUBSCRIBE [channel [channel ...]]
+		// 如果没有写 channel，就把这个 client 订阅的所有 channel 都取消掉
+		if len(cmdLine) == 1 {
+			return pubsub.Unsubscribe(mdb.hub, c, nil)
+		}
+		return pubsub.Unsubscribe(mdb.hub, c, cmdLine[1:])
+	} else if cmdName == "punsubscribe" {
+		//PUNSUBSCRIBE [channel [channel ...]]
+		// 如果没有写 channel，就把这个 client 订阅的所有 channel 都取消掉
+		if len(cmdLine) == 1 {
+			return pubsub.PUnsubscribe(mdb.hub, c, nil)
+		}
+		return pubsub.PUnsubscribe(mdb.hub, c, cmdLine[1:])
 	}
 	// 如果本节点时 slave 节点，那么不允许 slave 接受来自客户端的写操作（擅自进行写操作，应该由 master 节点进行同步）
 	// 这里统一拦截掉
@@ -357,7 +379,6 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	endTime := time.Now()
 	// todo 不加 go 比 加 go 处理效率更高，可以考虑使用 pprof 在两种不同情况下，查查调度器的情况
 	mdb.handleSlowLog(startTime.UnixMicro(), endTime.UnixMicro(), cmdLine)
-
 	return cmdReply
 }
 
