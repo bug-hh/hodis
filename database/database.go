@@ -23,7 +23,6 @@ import (
 type MultiDB struct {
 	dbSet []*atomic.Value
 
-	// todo 需要时再实现 handle publish/subscribe
 	hub *pubsub.Hub
 
 	aofHandler *aof.Handler
@@ -63,7 +62,7 @@ func NewStandaloneServer() *MultiDB {
 		mdb.dbSet[i] = holder
 	}
 
-	// todo 以后实现订阅，发布功能
+	// 发布和订阅功能
 	mdb.hub = pubsub.MakeHub()
 
 	// aof 功能
@@ -93,7 +92,7 @@ func NewStandaloneServer() *MultiDB {
 		validAof = true
 	}
 
-	// todo 以后自己 rdb 解析
+	// todo 以后自己实现 rdb 解析
 	// 按照 redis 的实现，如果开启了 aof，就不会使用 rdb
 	if config.Properties.RDBFilename != "" && !validAof {
 		loadRdbFile(mdb)
@@ -216,6 +215,7 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		}
 		key := strings.ToLower(string(cmdLine[1]))
 		if key == "listening-port" {
+			listeningPort := string(cmdLine[2])
 			// 在收到来自 slave 的 ack 后，初始化用于命令传播的回调函数
 			for _, db := range mdb.dbSet {
 				singleDB := db.Load().(*DB)
@@ -226,6 +226,7 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 				singleDB.cmdSync = func(line CmdLine) (ret error) {
 					// 只有自己是 master，才有资格向 slave 传播写命令
 					if atomic.LoadInt32(&mdb.role) == MasterRole {
+						// 遍历 master 下的所有 slave 节点
 						for _, cc := range mdb.slaves {
 							syncReq := protocol.MakeMultiBulkReply(line)
 							ret = cc.Write(syncReq.ToBytes())
@@ -243,7 +244,12 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 				}
 			}
 			cc := c.(*connection.Connection)
-			mdb.slaves[cc.RemoteAddr().String()] = c
+			// 把 slave 的 ip 给拿出来
+			// 注意，这里的 cc.RemoteAddr().String() 里的 port 不是 slave 服务的端口，而是 slave 与 master 建立的 tcp 连接的端口
+			// 而我们要记录的是 slave 服务的端口，这个端口号，是 slave 通过 listening-port 传给 master 的
+			slaveSocket := strings.Split(cc.RemoteAddr().String(), ":")
+			slaveKey := fmt.Sprintf("%s:%s", slaveSocket[0], listeningPort)
+			mdb.slaves[slaveKey] = c
 			return protocol.MakeOkReply()
 		} else if key == "ack" {
 			// 收到来自 slave 的 ack
@@ -304,9 +310,6 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	if cmdName == "slaveof" {
 		if c != nil && c.InMultiState() {
 			return protocol.MakeErrReply("cannot use slave of database within multi")
-		}
-		if len(cmdLine) != 3 {
-			return protocol.MakeArgNumErrReply("SLAVEOF")
 		}
 		return mdb.execSlaveOf(c, cmdLine[1:])
 	}
@@ -467,8 +470,14 @@ func (mdb *MultiDB) AfterClientClose(c redis.Connection) {
 
 // Close graceful shutdown database
 func (mdb *MultiDB) Close() {
-	// stop replication first
+	// 不论主从节点，都可能开启了 aof
+	if mdb.aofHandler != nil {
+		mdb.aofHandler.Close()
+	}
 
+	if mdb.role == SlaveRole {
+		mdb.slaveOfNone()
+	}
 }
 
 
@@ -500,9 +509,8 @@ func (mdb *MultiDB) loadDB(dbIndex int, newDB *DB) redis.Reply {
 func (mdb *MultiDB) calcSlaves() []string {
 	var ret []string
 	i := 0
-	for _, conn := range mdb.slaves {
-		c := conn.(*connection.Connection)
-		addrs := strings.Split(c.RemoteAddr().String(), ":")
+	for addr, _ := range mdb.slaves {
+		addrs := strings.Split(addr, ":")
 		slaveInfo := fmt.Sprintf("slave%d:ip=%s,port=%s,state=online,offset=%d,lag=%d",
 			i, addrs[0], addrs[1], mdb.replication.replOffset, time.Now().Unix()-mdb.replication.lastRecvTime.Unix())
 		ret = append(ret, slaveInfo)
@@ -511,18 +519,33 @@ func (mdb *MultiDB) calcSlaves() []string {
 	return ret
 }
 
+// 这里处理来自 sentinel 发送给 master or slave info 命令后，对 info 命令的回答
 func (mdb *MultiDB) handleInfo() redis.Reply {
+	logger.Info("handleInfo")
+	roleStr := "master"
+	if mdb.role == SlaveRole {
+		roleStr = "slave"
+	}
 	text := []string{
 		"# Replication",
-		"role:master",
-		fmt.Sprintf("connected_slaves:%d", len(mdb.slaves)),
+		fmt.Sprintf("role:%s", roleStr),
 	}
-	text = append(text, mdb.calcSlaves()...)
-	text = append(text, fmt.Sprintf("master_replid:%s:%d", config.Properties.Bind, config.Properties.Port))
-	text = append(text, fmt.Sprintf("master_repl_offset:%d", mdb.replication.replOffset))
-
+	if mdb.role == MasterRole {
+		text = append(text, fmt.Sprintf("connected_slaves:%d", len(mdb.slaves)))
+		text = append(text, mdb.calcSlaves()...)
+		text = append(text, fmt.Sprintf("master_replid:%s:%d", config.Properties.Bind, config.Properties.Port))
+	} else {
+		text = append(text, fmt.Sprintf("master_host:%s", mdb.replication.masterHost))
+		text = append(text, fmt.Sprintf("master_port:%d", mdb.replication.masterPort))
+		status := "up"
+		if !mdb.replication.isMasterOnline {
+			status = "down"
+		}
+		text = append(text, fmt.Sprintf("master_link_status:%s", status))
+	}
 	var content [][]byte
 	for _, s := range text {
+		logger.Info("s = ", s)
 		bs := []byte(s)
 		content = append(content, bs)
 	}

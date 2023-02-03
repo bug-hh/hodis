@@ -52,7 +52,7 @@ func Subscribe(hub *Hub, c redis.Connection, args [][]byte) redis.Reply {
 	for i, b := range args {
 		channels[i] = string(b)
 	}
-
+	// todo 并发锁应该看看
 	hub.subsLocker.Locks(channels...)
 	defer hub.subsLocker.UnLocks(channels...)
 

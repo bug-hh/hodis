@@ -50,13 +50,15 @@ type replicationStatus struct {
 	/*
 	专门用于主从之间收到心跳检测包的通道
 	 */
-	masterAckConn net.Conn
-	masterAckChan <-chan *parser.Payload
+	//masterAckConn net.Conn
+	//masterAckChan <-chan *parser.Payload
 
 	replId string
 	replOffset int64
 	lastRecvTime time.Time
 	running sync.WaitGroup
+
+	isMasterOnline bool
 
 	// 复制缓冲区
 	replBuffer [][][]byte
@@ -82,6 +84,7 @@ func (mdb *MultiDB) reconnectWithMaster() error {
 	logger.Info("reconnecting with master")
 	mdb.replication.mutex.Lock()
 	defer mdb.replication.mutex.Unlock()
+	mdb.replication.isMasterOnline = false
 	mdb.replication.stopSlaveWithMutex()
 	go mdb.syncWithMaster()
 	return nil
@@ -114,7 +117,7 @@ func (mdb *MultiDB) slaveCron() {
 	minLastRecvTime := time.Now().Add(-replTimeout)
 	// 如果上一次收到 master 的应答时间超过 60s，就认为主从已经断开连接了
 	if repl.lastRecvTime.Before(minLastRecvTime) {
-		logger.Info("slave timeout: ", repl.lastRecvTime.Unix())
+		logger.Info("receive master ack timeout: ", repl.lastRecvTime.Unix())
 		err := mdb.reconnectWithMaster()
 		if err != nil {
 			logger.Error("send failed " + err.Error())
@@ -131,11 +134,32 @@ func (mdb *MultiDB) slaveCron() {
 	//}
 }
 
+// 这个是从节点执行的
 func (mdb *MultiDB) execSlaveOf(c redis.Connection, args [][]byte) redis.Reply {
 	// slaveof no one 断开所有连接
+	for _, as := range args {
+		logger.Info("args: ", string(as))
+	}
 	if strings.ToLower(string(args[0])) == "no" &&
 		strings.ToLower(string(args[1])) == "one" {
-		mdb.slaveOfNone()
+		// 如果当前节点是 master 节点，且它收到了 slaveof no one slaveIp slavePort,
+		// 那么它就应该吧这个 slave 从自己的 slaves 字典里剔除
+		ss := fmt.Sprintf("ip: %s, port: %d", config.Properties.Bind, config.Properties.Port)
+		logger.Info("ss: ", ss)
+		for kk, _ := range mdb.slaves {
+			logger.Info("mdb.slaves: ", kk)
+		}
+		if mdb.role == MasterRole && len(mdb.slaves) > 0 {
+			if len(args) == 4 {
+				key := fmt.Sprintf("%s:%s", string(args[2]), string(args[3]))
+				logger.Info("master 执行 slaveof no one ", key )
+				delete(mdb.slaves, key)
+			} else {
+				return protocol.MakeArgNumErrReply("slaveof no one slaveIp slavePort")
+			}
+		} else {
+			mdb.slaveOfNone()
+		}
 		return protocol.MakeOkReply()
 	}
 
@@ -201,21 +225,16 @@ func (mdb MultiDB) syncWithMaster() {
 func (mdb *MultiDB) connectWithMaster() error {
 	modCount := atomic.LoadInt32(&mdb.replication.modCount)
 	addr := mdb.replication.masterHost + ":" + strconv.Itoa(mdb.replication.masterPort)
+	// 与 master 建立连接
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		mdb.slaveOfNone()
 		return errors.New("connect master failed " + err.Error())
 	}
 
-	//ackConn, ackErr := net.Dial("tcp", addr)
-	//if ackErr != nil {
-	//	mdb.slaveOfNone()
-	//	return errors.New("Ack channel to master disconnected: " + ackErr.Error())
-	//}
-
 	masterChan := parser.ParseStream(conn)
-	//ackChan := parser.ParseStream(ackConn)
 
+	// slave 先给 master 发个 ping
 	pingCmdLine := utils.ToCmdLine("ping")
 	pingReq := protocol.MakeMultiBulkReply(pingCmdLine)
 	_, err = conn.Write(pingReq.ToBytes())
@@ -226,6 +245,7 @@ func (mdb *MultiDB) connectWithMaster() error {
 	if pingResp.Err != nil {
 		return errors.New("read ping response failed: " + pingResp.Err.Error())
 	}
+
 	switch reply := pingResp.Data.(type) {
 	case *protocol.StandardErrReply:
 		if !strings.HasPrefix(reply.Error(), "NOAUTH") &&
@@ -309,6 +329,7 @@ func (mdb *MultiDB) connectWithMaster() error {
 
 	// 最近一次收到 master 回复的时间
 	mdb.replication.lastRecvTime = time.Now()
+	mdb.replication.isMasterOnline = true
 	mdb.replication.mutex.Unlock()
 	return nil
 }
@@ -492,10 +513,21 @@ func (mdb *MultiDB) slaveOfNone() {
 	mdb.replication.mutex.Lock()
 	defer mdb.replication.mutex.Unlock()
 
+	// 当前节点执行 slaveof no one 时，如果它原本是 slave 节点，那么它需要告诉 master 节点，兽人永不为奴，
+	// 让 master 把它从 slaves 里删掉
+	cmd := fmt.Sprintf("slaveof", config.Properties.Bind, config.Properties.Port)
+	logger.Info("slaveofNone: ", cmd)
+	cmdLine := utils.ToCmdLine("slaveof", "no", "one", config.Properties.Bind, strconv.Itoa(config.Properties.Port))
+	logger.Info("remote addr: ", mdb.replication.masterConn.RemoteAddr().String())
+	_, err := mdb.replication.masterConn.Write(protocol.MakeMultiBulkReply(cmdLine).ToBytes())
+	if err != nil {
+		logger.Error("error on execute slaveof no one in slave node")
+	}
 	mdb.replication.masterHost = ""
 	mdb.replication.masterPort = 0
 	mdb.replication.replId = ""
 	mdb.replication.replOffset = -1
+	atomic.StoreInt32(&mdb.role, MasterRole)
 	mdb.replication.stopSlaveWithMutex()
 }
 
@@ -506,6 +538,13 @@ func (repl *replicationStatus) stopSlaveWithMutex() {
 	atomic.AddInt32(&repl.modCount, 1)
 	// send cancel to receiveAOF
 	if repl.cancel != nil {
+		/*
+		这个 cancel 函数来自于 withCancel，当这个 cancel 函数被调用时，receiveAOF 里的 done 通道就会被关闭，
+		而通道关闭，将导致退出 select 可以参考：https://www.jianshu.com/p/d68715c5b341
+		ctx, cancel := context.WithCancel(context.Background())
+		mdb.replication.ctx = ctx
+		mdb.replication.cancel = cancel
+		 */
 		repl.cancel()
 		repl.running.Wait()
 	}
@@ -517,7 +556,10 @@ func (repl *replicationStatus) stopSlaveWithMutex() {
 	repl.masterConn = nil
 	repl.masterChan = nil
 
-	repl.masterAckConn = nil
-	repl.masterAckChan = nil
+	//if repl.masterAckConn != nil {
+	//	_ = repl.masterAckConn.Close()
+	//}
+	//repl.masterAckConn = nil
+	//repl.masterAckChan = nil
 }
 

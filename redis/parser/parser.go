@@ -39,10 +39,6 @@ func ParseStream(reader io.Reader) <-chan *Payload {
 	return ch
 }
 
-func Parse00(reader *bufio.Reader, ch chan<- *Payload) {
-	parse0(reader, ch)
-}
-
 type readState struct {
 	readingMultiLine  bool
 	expectedArgsCount int

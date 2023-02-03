@@ -6,6 +6,7 @@ import (
 	"sort"
 )
 
+// https://zhouyx.blog.csdn.net/article/details/122029659?spm=1001.2101.3001.6650.4&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-4-122029659-blog-99322712.pc_relevant_3mothn_strategy_and_data_recovery&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-4-122029659-blog-99322712.pc_relevant_3mothn_strategy_and_data_recovery&utm_relevant_index=5
 /*
 如果是非压缩节点，有多个字符，对应多个节点，需要对所有字符进行排序
 如果是压缩节点，只有一个节点，无需排序
