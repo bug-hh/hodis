@@ -6,9 +6,11 @@ package tcp
 import (
 	"context"
 	"fmt"
+	"github.com/hodis/config"
 	"github.com/hodis/interface/tcp"
 	"github.com/hodis/lib/logger"
 	"net"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -29,7 +31,8 @@ func ListenAndServeWithSignal(cfg *Config, handler tcp.Handler) error {
 	//  当操作系统发出以下 4 个信号给程序时，传递信号给 sigCh
 	signal.Notify(sigCh, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)
 
-	// 启一个协程来专门监听并处理上述事件
+	// 启一个协程来专门
+	//监听并处理上述事件
 	go func() {
 		sig := <-sigCh
 		switch sig {
@@ -39,12 +42,12 @@ func ListenAndServeWithSignal(cfg *Config, handler tcp.Handler) error {
 	}()
 
 	// 启动 pprof，用于性能测试分析
-	// 只在单机模式下打开, 如果不需要排查性能问题，单机模式下也可以注释掉代码
-	//if config.Properties.ServerMode == config.STANDALONE {
-	//	go func() {
-	//		fmt.Println(http.ListenAndServe("localhost:6060", nil))
-	//	}()
-	//}
+	// 如果不需要排查性能问题，也可以注释掉代码
+	if config.Properties.ServerMode == config.SENTINEL {
+		go func() {
+			fmt.Println(http.ListenAndServe("localhost:6060", nil))
+		}()
+	}
 
 	listener, err := net.Listen("tcp", cfg.Address)
 	if err != nil {

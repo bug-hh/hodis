@@ -230,7 +230,6 @@ func (mdb MultiDB) syncWithMaster() {
 		return
 	}
 
-
 	// 同步完成后，主从服务器之间开启 命令传播
 	err = mdb.receiveAOF()
 	if err != nil {
@@ -319,24 +318,6 @@ func (mdb *MultiDB) connectWithMaster() error {
 	if err != nil {
 		return err
 	}
-
-	// 在 redis 实现里，没有这个
-	// announce ip
-	//if config.Properties.SlaveAnnounceIP != "" {
-	//	ipCmdLine := utils.ToCmdLine("REPLCONF", "ip-address", config.Properties.SlaveAnnounceIP)
-	//	err = sendCmdToMaster(conn, ipCmdLine, masterChan)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
-
-	// 在 redis 实现里，没有这个
-	// announce capacity
-	//capaCmdLine := utils.ToCmdLine("REPLCONF", "capa", "psync2")
-	//err = sendCmdToMaster(conn, capaCmdLine, masterChan)
-	//if err != nil {
-	//	return err
-	//}
 
 	// update connection
 	mdb.replication.mutex.Lock()

@@ -314,16 +314,25 @@ func (s *SentinelServer) InitSentinel() {
 	s.startSentinelCron()
 
 	// 逐个读取每个 master/slave 的 info/ping 回复
-	s.receiveMasterOrSlaveResp()
+	// 改成定时运行，而不是无限循环
+	execTask(2, s.receiveMasterOrSlaveResp)
 
-	//  因为订阅了 _sentinel_:hello 频道，所以要读取该频道上的消息
-	s.receiveMsgFromChannel()
+	/*
+	sentinel 服务接收来自 _sentinel_:hello 频道上的消息，
+	这个消息是其他 sentinel 或它自己发到频道上的
+	改成定时运行，而不是无限循环
+	*/
+	execTask(4, s.receiveMsgFromChannel)
 
-	// 读取来自其他 sentinel 的回复
-	s.receiveMsgFromSentinel()
+	// 读取来自其他 sentinel 的回复, 改成定时运行，而不是无限循环
+	execTask(6, s.receiveMsgFromSentinel)
 
 }
 
+/*
+sentinel 服务接收来自 _sentinel_:hello 频道上的消息，
+这个消息是其他 sentinel 或它自己发到频道上的
+ */
 func (s *SentinelServer) parseMsgFromChannel(payload *parser.Payload) {
 	if payload.Err != nil {
 		return
@@ -350,8 +359,8 @@ func (s *SentinelServer) parseMsgFromChannel(payload *parser.Payload) {
 		ls = strings.Split(msg, ",")
 		ip, portStr, runID := ls[0], ls[1], ls[2]
 		port, _ := strconv.Atoi(portStr)
+		// 自己发的消息就忽略
 		if ip == config.Properties.Bind && port == config.Properties.Port {
-
 			return
 		}
 		// 记录其他 sentinel
@@ -435,247 +444,231 @@ func (s *SentinelServer) parseMsgFromSentinel(payload *parser.Payload) {
 	}
 }
 
+/*
+用来接收 is-master-down 的回复
+ */
 func (s *SentinelServer) receiveMsgFromSentinel() {
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logger.Error("panic", err)
+	if len(s.selChanMap) == 0 {
+		return
+	}
+	for _, channel := range s.selChanMap {
+		select {
+		case payload := <-channel:
+			if payload.Err != nil {
+				logger.Info("receive sentinel response error, ", payload.Err)
 			}
-		}()
-		for {
-			for _, channel := range s.selChanMap {
-				select {
-				case payload := <-channel:
-					if payload.Err != nil {
-						logger.Info("receive master/slave response error, ", payload.Err)
-					}
-					// 拿到解析信息后，开始更新
-					s.parseMsgFromSentinel(payload)
-				default:
-					continue
-				}
-			}
+			// 拿到解析信息后，开始更新
+			s.parseMsgFromSentinel(payload)
+		default:
+			continue
 		}
-	}()
-
+	}
 }
-func (s *SentinelServer) receiveMsgFromChannel() {
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logger.Error("panic", err)
-			}
-		}()
-		for {
-			for _, channel := range s.subChanMap {
-				select {
-				case payload := <-channel:
-					if payload.Err != nil {
-						logger.Info("receive master/slave response error, ", payload.Err)
-					}
-					// 拿到解析信息后，开始更新
-					s.parseMsgFromChannel(payload)
-				default:
-					continue
-				}
-			}
-		}
-	}()
 
+/*
+sentinel 服务接收来自 _sentinel_:hello 频道上的消息，
+这个消息是其他 sentinel 或它自己发到频道上的
+*/
+func (s *SentinelServer) receiveMsgFromChannel() {
+	for _, channel := range s.subChanMap {
+		select {
+		case payload := <-channel:
+			if payload.Err != nil {
+				logger.Info("receive master/slave response error, ", payload.Err)
+			}
+			// 拿到解析信息后，开始更新
+			s.parseMsgFromChannel(payload)
+		default:
+			continue
+		}
+	}
 }
 
 // 这里用来接收 sentinel 向 master 和 slave 发出 info 命令后，收到的回答
 // 或者接受 sentinel 向其他节点发送 ping 命令后，收到的回答
 func (s *SentinelServer) receiveMasterOrSlaveResp() {
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logger.Error("panic", err)
+	for name, channel := range s.cmdChanMap {
+		select {
+		case payload := <-channel:
+			if payload.Err != nil {
+				logger.Info("receive master/slave response error, ", payload.Err)
 			}
-		}()
-		for {
-			for name, channel := range s.cmdChanMap {
-				select {
-				case payload := <-channel:
-					if payload.Err != nil {
-						logger.Info("receive master/slave response error, ", payload.Err)
-					}
-					// 将 payload 当做 ping 命令回复解析
-					if parsePing(payload, s, name) {
-						continue
-					}
+			// 将 payload 当做 ping 命令回复解析
+			if parsePing(payload, s, name) {
+				continue
+			}
 
-					// 将 payload 当做 info 命令回复解析
-					mi, si := parseInfoFromMasterOrSlave(payload)
-					if si == nil || len(si) == 0 {
-						// 如果这是一个 master 反馈回来的，那么就应该清除这个 master 下的所有 slave
-						// 首先要判断它是不是一个 master
-						raw, exists := s.state.Masters.Get(name)
-						if exists {
-							sri, _ := raw.(*SentinelRedisInstance)
-							// 断开 sentinel 和 slave 的连接
-							sri.Slaves.ForEach(func(key string, val interface{}) bool {
-								slaveSri, _ := val.(*SentinelRedisInstance)
-								addr := fmt.Sprintf("%s:%d", slaveSri.Addr.Ip, slaveSri.Addr.Port)
-								for kaddr, cmdConn := range s.cmdConnMap {
-									if kaddr == addr {
-										cc, _ := cmdConn.(*connection.Connection)
-										_ = cc.Close()
-										delete(s.cmdConnMap, addr)
+			// 将 payload 当做 info 命令回复解析
+			mi, si := parseInfoFromMasterOrSlave(payload)
+			if si == nil || len(si) == 0 {
+				// 如果这是一个 master 反馈回来的，那么就应该清除这个 master 下的所有 slave
+				// 首先要判断它是不是一个 master
+				raw, exists := s.state.Masters.Get(name)
+				if exists {
+					sri, _ := raw.(*SentinelRedisInstance)
+					// 断开 sentinel 和 slave 的连接
+					sri.Slaves.ForEach(func(key string, val interface{}) bool {
+						slaveSri, _ := val.(*SentinelRedisInstance)
+						addr := fmt.Sprintf("%s:%d", slaveSri.Addr.Ip, slaveSri.Addr.Port)
+						for kaddr, cmdConn := range s.cmdConnMap {
+							if kaddr == addr {
+								cc, _ := cmdConn.(*connection.Connection)
+								_ = cc.Close()
+								delete(s.cmdConnMap, addr)
 
-									}
-								}
-
-								for kaddr, cmdConn := range s.subConnMap {
-									if kaddr == addr {
-										cc, _ := cmdConn.(*connection.Connection)
-										_ = cc.Close()
-										delete(s.subConnMap, addr)
-									}
-								}
-								return true
-							})
-							sri.Slaves.Clear()
-						}
-						continue
-					}
-					// 解析 master 返回的 slave 信息
-					if si != nil && len(si) > 0 {
-						raw, exists := s.state.Masters.Get(name)
-						if !exists {
-							logger.Info("sentinel receiveMasterResp: ", name, "not exists")
-							continue
-						}
-						sri, _ := raw.(*SentinelRedisInstance)
-
-						tempMap := make(map[string]bool)
-						for _, slaveItem := range si {
-							slaveKey := fmt.Sprintf("%s:%s", slaveItem.ip, slaveItem.port)
-							tempMap[slaveKey] = true
-						}
-
-						for _, slaveItem := range si {
-							slaveKey := fmt.Sprintf("%s:%s", slaveItem.ip, slaveItem.port)
-							port, _ := strconv.Atoi(slaveItem.port)
-							slaveSriRaw, ok := sri.Slaves.Get(slaveKey)
-							// 如果这个 slave 节点是一个新增节点，那么就建立 sentinel 和 slave 的命令和订阅连接
-							if !ok {
-								temp := &SentinelRedisInstance{
-									Role:            database.SlaveRole,
-									Name:            slaveKey,
-									Addr:            &SentinelAddr{
-										Ip:   slaveItem.ip,
-										Port: port,
-									},
-									Slaves:          nil,
-									ParallelSyncs:   0,
-								}
-								sri.Slaves.Put(slaveKey, temp)
-								// 建立 sentinel 和 slave 之间的 tcp 连接( 一个是命令连接，一个是订阅连接）
-								logger.Info("新增一个 slave, addr: ", slaveKey)
-								cmdConn, err := net.Dial("tcp", slaveKey)
-								if err != nil {
-									logger.Warn("cannot connect to %s", slaveKey)
-									continue
-								}
-								// key 是 master name, 建立命令连接
-								s.cmdConnMap[slaveKey] = connection.NewConn(cmdConn)
-								s.cmdChanMap[slaveKey] = parser.ParseStream(cmdConn)
-
-								// todo 建立订阅连接
-
-							} else {
-								// 在当前的时间下，这个 slave 已经和 master 断开了
-								if _, exists := tempMap[slaveKey]; !exists {
-									if conn, ok := s.cmdConnMap[slaveKey]; ok {
-										cc, _ := conn.(*connection.Connection)
-										_ = cc.Close()
-										delete(s.cmdConnMap, slaveKey)
-									}
-
-									if conn, ok := s.subConnMap[slaveKey]; ok {
-										cc, _ := conn.(*connection.Connection)
-										_ = cc.Close()
-										delete(s.subConnMap, slaveKey)
-									}
-									sri.Slaves.Remove(slaveKey)
-								} else {
-									slaveSri, _ := slaveSriRaw.(*SentinelRedisInstance)
-									slaveSri.Role = database.SlaveRole
-									slaveSri.Name = slaveKey
-									slaveSri.Addr.Ip = slaveItem.ip
-									slaveSri.Addr.Port = port
-									sri.Slaves.Put(slaveKey, slaveSri)
-								}
 							}
 						}
-						s.state.Masters.Put(name, sri)
-					}
 
-					if mi != nil {
-						// 解析 slave 返回的 master 信息
-						// 根据 slave 返回的 master 信息（mi) 更新
-						// 由于 slave 只知道 master 的 ip 和 port，但不知道配置文件中 master name，所以要遍历整个 masters 字典
-						isNewMaster := true
-						s.state.Masters.ForEach(func(key string, val interface{}) bool {
-							masterSri, _ := val.(*SentinelRedisInstance)
-							// 如果已经存在，那就不用更新了
-							if mi.masterIp == masterSri.Addr.Ip && mi.masterPort == int64(masterSri.Addr.Port) {
-								isNewMaster = false
-								return false
+						for kaddr, cmdConn := range s.subConnMap {
+							if kaddr == addr {
+								cc, _ := cmdConn.(*connection.Connection)
+								_ = cc.Close()
+								delete(s.subConnMap, addr)
 							}
-
-							// todo 删除日志打印
-							logger.Info("master", "key", "有 slave ", masterSri.Slaves.Len(), " 个")
-							masterSri.Slaves.ForEach(func(key string, val interface{}) bool {
-								slaveSri, _ := val.(*SentinelRedisInstance)
-								logger.Info("\tslave: ", key)
-								logger.Info("\tip: ", slaveSri.Addr.Ip)
-								logger.Info("\tport: ", slaveSri.Addr.Port)
-								return true
-							})
-							return true
-						})
-						// 如果 slave 连接的是一台新的 master，那就记录下来，同时建立连接
-						if isNewMaster {
-							// 这里的 key 用 masterIp:materPort
-							key := fmt.Sprintf("%s:%d", mi.masterIp, mi.masterPort)
-							masterSri := &SentinelRedisInstance{
-								Role:            database.MasterRole,
-								Name:            key,
-								DownAfterPeriod: 30000,
-								Quorum:          1,
-								Addr:            &SentinelAddr{
-									Ip: mi.masterIp,
-									Port: int(mi.masterPort),
-								},
-								Slaves:          dict.MakeConcurrent(DICT_SIZE),
-								ParallelSyncs:   1,
-							}
-
-							// 建立 sentinel 和 master 之间的 tcp 连接( 一个是命令连接，一个是订阅连接）
-							logger.Info("新增一个 master，addr: ", key)
-							cmdConn, err := net.Dial("tcp", key)
-							if err != nil {
-								logger.Warn("cannot connect to new master: %s", key)
-								continue
-							}
-							// key 是 master name, 建立命令连接
-							s.cmdConnMap[key] = connection.NewConn(cmdConn)
-							s.cmdChanMap[key] = parser.ParseStream(cmdConn)
-
-							// todo 建立订阅连接
-
-
-							s.state.Masters.Put(key, masterSri)
 						}
-					}
-				default:
+						return true
+					})
+					sri.Slaves.Clear()
+				}
+				continue
+			}
+			// 解析 master 返回的 slave 信息
+			if si != nil && len(si) > 0 {
+				raw, exists := s.state.Masters.Get(name)
+				if !exists {
+					logger.Info("sentinel receiveMasterResp: ", name, "not exists")
 					continue
 				}
+				sri, _ := raw.(*SentinelRedisInstance)
+
+				tempMap := make(map[string]bool)
+				for _, slaveItem := range si {
+					slaveKey := fmt.Sprintf("%s:%s", slaveItem.ip, slaveItem.port)
+					tempMap[slaveKey] = true
+				}
+
+				for _, slaveItem := range si {
+					slaveKey := fmt.Sprintf("%s:%s", slaveItem.ip, slaveItem.port)
+					port, _ := strconv.Atoi(slaveItem.port)
+					slaveSriRaw, ok := sri.Slaves.Get(slaveKey)
+					// 如果这个 slave 节点是一个新增节点，那么就建立 sentinel 和 slave 的命令和订阅连接
+					if !ok {
+						temp := &SentinelRedisInstance{
+							Role:            database.SlaveRole,
+							Name:            slaveKey,
+							Addr:            &SentinelAddr{
+								Ip:   slaveItem.ip,
+								Port: port,
+							},
+							Slaves:          nil,
+							ParallelSyncs:   0,
+						}
+						sri.Slaves.Put(slaveKey, temp)
+						// 建立 sentinel 和 slave 之间的 tcp 连接( 一个是命令连接，一个是订阅连接）
+						logger.Info("新增一个 slave, addr: ", slaveKey)
+						cmdConn, err := net.Dial("tcp", slaveKey)
+						if err != nil {
+							logger.Warn("cannot connect to %s", slaveKey)
+							continue
+						}
+						// key 是 master name, 建立命令连接
+						s.cmdConnMap[slaveKey] = connection.NewConn(cmdConn)
+						s.cmdChanMap[slaveKey] = parser.ParseStream(cmdConn)
+
+						// todo 建立订阅连接
+
+					} else {
+						// 在当前的时间下，这个 slave 已经和 master 断开了
+						if _, exists := tempMap[slaveKey]; !exists {
+							if conn, ok := s.cmdConnMap[slaveKey]; ok {
+								cc, _ := conn.(*connection.Connection)
+								_ = cc.Close()
+								delete(s.cmdConnMap, slaveKey)
+							}
+
+							if conn, ok := s.subConnMap[slaveKey]; ok {
+								cc, _ := conn.(*connection.Connection)
+								_ = cc.Close()
+								delete(s.subConnMap, slaveKey)
+							}
+							sri.Slaves.Remove(slaveKey)
+						} else {
+							slaveSri, _ := slaveSriRaw.(*SentinelRedisInstance)
+							slaveSri.Role = database.SlaveRole
+							slaveSri.Name = slaveKey
+							slaveSri.Addr.Ip = slaveItem.ip
+							slaveSri.Addr.Port = port
+							sri.Slaves.Put(slaveKey, slaveSri)
+						}
+					}
+				}
+				s.state.Masters.Put(name, sri)
 			}
+
+			if mi != nil {
+				// 解析 slave 返回的 master 信息
+				// 根据 slave 返回的 master 信息（mi) 更新
+				// 由于 slave 只知道 master 的 ip 和 port，但不知道配置文件中 master name，所以要遍历整个 masters 字典
+				isNewMaster := true
+				s.state.Masters.ForEach(func(key string, val interface{}) bool {
+					masterSri, _ := val.(*SentinelRedisInstance)
+					// 如果已经存在，那就不用更新了
+					if mi.masterIp == masterSri.Addr.Ip && mi.masterPort == int64(masterSri.Addr.Port) {
+						isNewMaster = false
+						return false
+					}
+
+					// todo 删除日志打印
+					logger.Info("master", "key", "有 slave ", masterSri.Slaves.Len(), " 个")
+					masterSri.Slaves.ForEach(func(key string, val interface{}) bool {
+						slaveSri, _ := val.(*SentinelRedisInstance)
+						logger.Info("\tslave: ", key)
+						logger.Info("\tip: ", slaveSri.Addr.Ip)
+						logger.Info("\tport: ", slaveSri.Addr.Port)
+						return true
+					})
+					return true
+				})
+				// 如果 slave 连接的是一台新的 master，那就记录下来，同时建立连接
+				if isNewMaster {
+					// 这里的 key 用 masterIp:materPort
+					key := fmt.Sprintf("%s:%d", mi.masterIp, mi.masterPort)
+					masterSri := &SentinelRedisInstance{
+						Role:            database.MasterRole,
+						Name:            key,
+						DownAfterPeriod: 30000,
+						Quorum:          1,
+						Addr:            &SentinelAddr{
+							Ip: mi.masterIp,
+							Port: int(mi.masterPort),
+						},
+						Slaves:          dict.MakeConcurrent(DICT_SIZE),
+						ParallelSyncs:   1,
+					}
+
+					// 建立 sentinel 和 master 之间的 tcp 连接( 一个是命令连接，一个是订阅连接）
+					logger.Info("新增一个 master，addr: ", key)
+					cmdConn, err := net.Dial("tcp", key)
+					if err != nil {
+						logger.Warn("cannot connect to new master: %s", key)
+						continue
+					}
+					// key 是 master name, 建立命令连接
+					s.cmdConnMap[key] = connection.NewConn(cmdConn)
+					s.cmdChanMap[key] = parser.ParseStream(cmdConn)
+
+					// todo 建立订阅连接
+
+
+					s.state.Masters.Put(key, masterSri)
+				}
+			}
+		default:
+			continue
 		}
-	}()
+	}
+
+
 }
 
 
