@@ -1,6 +1,7 @@
 package database
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -13,7 +14,10 @@ import (
 	"github.com/hodis/redis/connection"
 	"github.com/hodis/redis/parser"
 	"github.com/hodis/redis/protocol"
+	"io"
 	"net"
+	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +28,7 @@ import (
 const (
 	MasterRole = iota
 	SlaveRole
+	SentinelRole
 )
 
 const (
@@ -50,33 +55,44 @@ type replicationStatus struct {
 	/*
 	专门用于主从之间收到心跳检测包的通道
 	 */
-	//masterAckConn net.Conn
-	//masterAckChan <-chan *parser.Payload
+	masterAckConn net.Conn
+	masterAckChan <-chan *parser.Payload
 
 	replId string
 	replOffset int64
+	replOffsetFileName string
+
 	lastRecvTime time.Time
 	running sync.WaitGroup
 
 	isMasterOnline bool
+	isRDBSyncDone bool
 
 	// 复制缓冲区
 	replBuffer [][][]byte
 }
 
+func (repl *replicationStatus) GetReplBuf() [][][]byte {
+	return repl.replBuffer
+}
+
 func initReplStatus() *replicationStatus {
 	repl := &replicationStatus{
+		replOffsetFileName: fmt.Sprintf("repl_offset_%s_%d.conf", config.Properties.Bind, config.Properties.Port),
 		replBuffer: make([][][]byte, REPL_BUFFER_SIZE),
 	}
+	readReplConf(repl)
 	return repl
 }
 
 func (repl *replicationStatus) sendAck2Master() error {
+	repl.mutex.Lock()
+	defer repl.mutex.Unlock()
 	psyncCmdLine := utils.ToCmdLine("REPLCONF", "ACK",
 		strconv.FormatInt(repl.replOffset, 10))
 	psyncReq := protocol.MakeMultiBulkReply(psyncCmdLine)
-	_, err := repl.masterConn.Write(psyncReq.ToBytes())
-	//_, err := repl.masterAckConn.Write(psyncReq.ToBytes())
+	//_, err := repl.masterConn.Write(psyncReq.ToBytes())
+	_, err := repl.masterAckConn.Write(psyncReq.ToBytes())
 	return err
 }
 
@@ -106,7 +122,7 @@ func (mdb *MultiDB) startReplCron() {
 
 func (mdb *MultiDB) slaveCron() {
 	repl := mdb.replication
-	if repl.masterConn == nil {
+	if repl.masterAckConn == nil {
 		return
 	}
 	replTimeout := 60 * time.Second
@@ -128,10 +144,10 @@ func (mdb *MultiDB) slaveCron() {
 	if err != nil {
 		logger.Error("send ack to master failed " + err.Error())
 	}
-	//ackResp := <-repl.masterAckChan
-	//if protocol.IsOKReply(ackResp.Data) {
-	//	repl.lastRecvTime = time.Now()
-	//}
+	ackResp := <-repl.masterAckChan
+	if protocol.IsOKReply(ackResp.Data) {
+		repl.lastRecvTime = time.Now()
+	}
 }
 
 // 这个是从节点执行的
@@ -182,11 +198,11 @@ func (mdb *MultiDB) execSlaveOf(c redis.Connection, args [][]byte) redis.Reply {
 }
 
 func (mdb MultiDB) syncWithMaster() {
-	defer func() {
-		if err := recover(); err != nil {
-			logger.Error(err)
-		}
-	}()
+	//defer func() {
+	//	if err := recover(); err != nil {
+	//		logger.Error(err)
+	//	}
+	//}()
 
 	mdb.replication.mutex.Lock()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -214,6 +230,7 @@ func (mdb MultiDB) syncWithMaster() {
 		return
 	}
 
+
 	// 同步完成后，主从服务器之间开启 命令传播
 	err = mdb.receiveAOF()
 	if err != nil {
@@ -232,7 +249,13 @@ func (mdb *MultiDB) connectWithMaster() error {
 		return errors.New("connect master failed " + err.Error())
 	}
 
+	ackConn, ackErr := net.Dial("tcp", addr)
+	if ackErr != nil {
+		mdb.slaveOfNone()
+		return errors.New("connect master failed " + ackErr.Error())
+	}
 	masterChan := parser.ParseStream(conn)
+	ackChan := parser.ParseStream(ackConn)
 
 	// slave 先给 master 发个 ping
 	pingCmdLine := utils.ToCmdLine("ping")
@@ -324,8 +347,8 @@ func (mdb *MultiDB) connectWithMaster() error {
 	mdb.replication.masterConn = conn
 	mdb.replication.masterChan = masterChan
 
-	//mdb.replication.masterAckConn = ackConn
-	//mdb.replication.masterAckChan = ackChan
+	mdb.replication.masterAckConn = ackConn
+	mdb.replication.masterAckChan = ackChan
 
 	// 最近一次收到 master 回复的时间
 	mdb.replication.lastRecvTime = time.Now()
@@ -343,7 +366,9 @@ func (mdb *MultiDB) doPsync() error {
 	// 根据 slave 的复制偏移量来判断是做完整重同步，还是部分重同步
 	if mdb.replication.replOffset > 0 && mdb.replication.replId != "" {
 		// slave 发出：需要部分重同步
-		psyncCmd := utils.ToCmdLine("psync", mdb.replication.replId, strconv.FormatInt(mdb.replication.replOffset, 64))
+		logger.Info("slave 发起部分重同步")
+		psyncCmd := utils.ToCmdLine("psync", mdb.replication.replId, strconv.FormatInt(mdb.replication.replOffset, 10))
+		logger.Info("psync ", mdb.replication.replId, " ", strconv.FormatInt(mdb.replication.replOffset, 10))
 		opCode, statusReply, opErr := mdb.sendAndJudgePsync(psyncCmd)
 		// 根据 master 的返回值判断是否做完整重同步
 		if opErr != nil || opCode == 0 {
@@ -353,11 +378,15 @@ func (mdb *MultiDB) doPsync() error {
 		}
 	} else {
 		// 完整重同步
+		logger.Info("slave 发起完整重同步")
 		psyncCmdLine := utils.ToCmdLine("psync", "?", "-1")
 		_, statusReply, err := mdb.sendAndJudgePsync(psyncCmdLine)
 		if err != nil {
 			return err
 		}
+		// master 在响应完整重同步后，会发自己的 replId 给 slave
+		ls := strings.Split(statusReply.Status, " ")
+		mdb.replication.replId = ls[1]
 		return mdb.doFullSync(statusReply)
 	}
 }
@@ -385,6 +414,10 @@ func (mdb *MultiDB) doFullSync(reply *protocol.StatusReply) error {
 		return errors.New("read response failed: " + psyncPayload2.Err.Error())
 	}
 	// 从主服务器获取 rdb 文件
+	// 主服务器没有生成 rdb 文件，没有数据要同步
+	if reflect.TypeOf(psyncPayload2.Data).String() == reflect.TypeOf(&protocol.NullBulkReply{}).String() {
+		return nil
+	}
 	psyncData, ok := psyncPayload2.Data.(*protocol.RDBFileReply)
 	if !ok {
 		return errors.New("illegal payload header: " + string(psyncPayload2.Data.ToBytes()))
@@ -411,6 +444,7 @@ func (mdb *MultiDB) doFullSync(reply *protocol.StatusReply) error {
 		return nil
 	}
 
+	// 这里存的是 master 的运行 id
 	mdb.replication.replId = headers[1]
 	mdb.replication.replOffset, err = strconv.ParseInt(headers[2], 10, 64)
 	if err != nil {
@@ -436,18 +470,22 @@ func (mdb *MultiDB) sendAndJudgePsync(psyncCmd [][]byte) (int, *protocol.StatusR
 	psyncReq := protocol.MakeMultiBulkReply(psyncCmd)
 	_, err := mdb.replication.masterConn.Write(psyncReq.ToBytes())
 	if err != nil {
+		logger.Error("mdb.replication.masterConn.Write error", err.Error())
 		return 0, nil, errors.New("send failed " + err.Error())
 	}
 	// 仍要根据 master 的返回值确定做哪种类型的同步
 	ch := mdb.replication.masterChan
 	psyncPayload1 := <-ch
 	if psyncPayload1.Err != nil {
+		logger.Error(errors.New("psync response failed: " + psyncPayload1.Err.Error()))
 		return 0, nil, errors.New("psync response failed: " + psyncPayload1.Err.Error())
 	}
 	psyncHeader, ok := psyncPayload1.Data.(*protocol.StatusReply)
 	if !ok {
+		logger.Error(errors.New("illegal payload header: " + string(psyncPayload1.Data.ToBytes())))
 		return 0, nil, errors.New("illegal payload header: " + string(psyncPayload1.Data.ToBytes()))
 	}
+	logger.Info("status: ", psyncHeader.Status)
 	if strings.HasPrefix(psyncHeader.Status, "fullsync") {
 		return 0, psyncHeader, nil
 	} else if strings.HasPrefix(psyncHeader.Status, "continue") {
@@ -464,6 +502,7 @@ func (mdb *MultiDB) receiveAOF() error {
 	conn.SetRole(connection.ReplicationRecvCli)
 	mdb.replication.mutex.Lock()
 	modCount := mdb.replication.modCount
+	mdb.replication.isRDBSyncDone = true
 	done := mdb.replication.ctx.Done()
 	mdb.replication.mutex.Unlock()
 	if done == nil {
@@ -481,7 +520,14 @@ func (mdb *MultiDB) receiveAOF() error {
 			}
 
 			if protocol.IsOKReply(payload.Data) {
+				logger.Info("receiveAOF receive OK Reply")
 				mdb.replication.lastRecvTime = time.Now()
+				break
+			}
+
+			if reflect.TypeOf(payload.Data).String() == reflect.TypeOf(&protocol.StatusReply{}).String() {
+				statusReply := payload.Data.(*protocol.StatusReply)
+				logger.Info("receiveAOF receive status reply: ", statusReply.Status)
 				break
 			}
 
@@ -513,20 +559,20 @@ func (mdb *MultiDB) slaveOfNone() {
 	mdb.replication.mutex.Lock()
 	defer mdb.replication.mutex.Unlock()
 
-	// 当前节点执行 slaveof no one 时，如果它原本是 slave 节点，那么它需要告诉 master 节点，兽人永不为奴，
-	// 让 master 把它从 slaves 里删掉
-	cmd := fmt.Sprintf("slaveof", config.Properties.Bind, config.Properties.Port)
-	logger.Info("slaveofNone: ", cmd)
+	// 当前节点执行 slaveof no one 时，如果它原本是 slave 节点，那么它需要告诉 master 节点，让 master 把它从 slaves 里删掉
 	cmdLine := utils.ToCmdLine("slaveof", "no", "one", config.Properties.Bind, strconv.Itoa(config.Properties.Port))
-	logger.Info("remote addr: ", mdb.replication.masterConn.RemoteAddr().String())
-	_, err := mdb.replication.masterConn.Write(protocol.MakeMultiBulkReply(cmdLine).ToBytes())
-	if err != nil {
-		logger.Error("error on execute slaveof no one in slave node")
+	if mdb.replication.masterConn != nil {
+		_, err := mdb.replication.masterConn.Write(protocol.MakeMultiBulkReply(cmdLine).ToBytes())
+		// 这里有种特殊情况，在 sentinel 模式下，如果之前的 master 挂了，那么这条命令是无法执行的
+		if err != nil {
+			logger.Error("error on execute slaveof no one in slave node. Old master might be down")
+		}
 	}
+
 	mdb.replication.masterHost = ""
 	mdb.replication.masterPort = 0
 	mdb.replication.replId = ""
-	mdb.replication.replOffset = -1
+	mdb.replication.replOffset = 0
 	atomic.StoreInt32(&mdb.role, MasterRole)
 	mdb.replication.stopSlaveWithMutex()
 }
@@ -553,13 +599,68 @@ func (repl *replicationStatus) stopSlaveWithMutex() {
 	if repl.masterConn != nil {
 		_ = repl.masterConn.Close() // parser.ParseStream will close masterChan
 	}
+
+	if repl.masterAckConn != nil {
+		_ = repl.masterAckConn.Close()
+	}
+
 	repl.masterConn = nil
 	repl.masterChan = nil
 
-	//if repl.masterAckConn != nil {
-	//	_ = repl.masterAckConn.Close()
-	//}
-	//repl.masterAckConn = nil
-	//repl.masterAckChan = nil
+	repl.masterAckConn = nil
+	repl.masterAckChan = nil
+
 }
 
+func (mdb *MultiDB) WriteReplOffsetToFile() {
+	fobj, err := os.OpenFile(mdb.replication.replOffsetFileName, os.O_CREATE | os.O_RDWR, 0744)
+	if err != nil{
+		logger.Error(fmt.Sprintf("打开 repl_offset 文件失败,错误为:%v\n",err))
+		return
+	}
+
+	defer fobj.Close()
+
+	writer := bufio.NewWriter(fobj) //往文件里面写入内容，得到了一个writer对象
+	_, _ = writer.WriteString(fmt.Sprintf("repl_offset %d\n", mdb.replication.replOffset))
+	logger.Info("+++++++++ ", mdb.replication.replId)
+	_, _ = writer.WriteString(fmt.Sprintf("repl_id %s\n", mdb.replication.replId))
+	_ = writer.Flush()
+}
+
+func readReplConf(repl *replicationStatus) {
+	if utils.PathExists(repl.replOffsetFileName) {
+		fobj, err := os.OpenFile(repl.replOffsetFileName, os.O_RDONLY, 0744)
+		if err != nil{
+			logger.Error(fmt.Sprintf("打开 repl_offset 文件失败,错误为:%v\n",err))
+			return
+		}
+
+		defer fobj.Close()
+
+		//使用buffio读取文件内容
+		reader := bufio.NewReader(fobj) //创建新的读的对象
+		for {
+			line , err := reader.ReadString('\n') //注意是字符，换行符。
+			if err == io.EOF{
+				logger.Info("文件读完了")
+				break
+			}
+			if err != nil{ //错误处理
+				logger.Error("读取文件失败,错误为: ", err)
+				return
+			}
+			line = strings.TrimSpace(line)
+			ls := strings.Split(line, " ")
+			if len(ls) != 2 {
+				continue
+			}
+			if ls[0] == "repl_offset" {
+				repl.replOffset, err = strconv.ParseInt(ls[1], 10, 64)
+			} else if ls[0] == "repl_id" {
+				repl.replId = ls[1]
+			}
+		}
+	}
+
+}

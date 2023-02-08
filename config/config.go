@@ -2,12 +2,14 @@ package config
 
 import (
 	"bufio"
+	"fmt"
 	"github.com/hodis/lib/logger"
 	"io"
 	"os"
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -41,6 +43,9 @@ type ServerProperties struct {
 	Sentinel map[string]map[string]interface{}
 
 	ServerMode int
+
+	// 配置文件名，默认路径为项目根目录
+	ConfigFileName string
 }
 
 // Properties holds global config properties
@@ -51,11 +56,14 @@ func init() {
 	Properties = &ServerProperties{
 		Bind:       "127.0.0.1",
 		Port:       6379,
-		AppendOnly: false,
+		AppendOnly: true,
+		AppendFilename: "hodis.aof",
 		SlowLogLogSlowerThan: -1,
 		Sentinel: make(map[string]map[string]interface{}),
 		// 默认单机模式
 		ServerMode: STANDALONE,
+		// 默认配置文件名
+		ConfigFileName: "hodis_defalut.conf",
 	}
 }
 
@@ -85,23 +93,6 @@ func parse(src io.Reader) *ServerProperties {
 
 	// read config file
 	rawMap := generateRawMap(src)
-	//rawMap := make(map[string]string)
-	//scanner := bufio.NewScanner(src)
-	//for scanner.Scan() {
-	//	line := scanner.Text()
-	//	if len(line) > 0 && line[0] == '#' {
-	//		continue
-	//	}
-	//	pivot := strings.IndexAny(line, " ")
-	//	if pivot > 0 && pivot < len(line)-1 { // separator found
-	//		key := line[0:pivot]
-	//		value := strings.Trim(line[pivot+1:], " ")
-	//		rawMap[strings.ToLower(key)] = value
-	//	}
-	//}
-	//if err := scanner.Err(); err != nil {
-	//	logger.Fatal(err)
-	//}
 
 	// parse format
 	t := reflect.TypeOf(config)
@@ -146,6 +137,12 @@ func parse(src io.Reader) *ServerProperties {
 				// 如果用户没有指定慢查询日志选项，那么设置为 -1，表示不进行慢查询日志记录
 				if slowKey == "slowlog-max-len" {
 					fieldVal.SetInt(-1)
+				}
+			case reflect.String:
+				if slowKey == "appendfilename" {
+					fieldVal.SetString(fmt.Sprintf("hodis-%s.aof", time.Now().Format("2006-01-02_15:04:05")))
+				} else if slowKey == "dbfilename" {
+					fieldVal.SetString(fmt.Sprintf("hodis-%s.rdb", time.Now().Format("2006-01-02_15:04:05")))
 				}
 			}
 		}
@@ -213,6 +210,7 @@ func SetupConfig(configFilename string) {
 	}
 	defer file.Close()
 	Properties = parse(file)
+	Properties.ConfigFileName = configFilename
 }
 
 func SetupSentinelConfig(configFileName string) {
@@ -222,6 +220,7 @@ func SetupSentinelConfig(configFileName string) {
 	}
 	defer file.Close()
 	Properties = parseSentinelConfigFile(file)
+	Properties.ConfigFileName = configFileName
 }
 
 const (
@@ -280,4 +279,53 @@ func ReadAllConfig() map[string]string {
 	}
 
 	return rawMap
+}
+
+func WriteToFile() {
+	fobj, err := os.OpenFile(Properties.ConfigFileName, os.O_CREATE | os.O_RDWR, 0744)
+	if err != nil{
+		fmt.Printf("打开文件失败,错误为:%v\n",err)
+		return
+	}
+
+	defer fobj.Close()
+
+	writer := bufio.NewWriter(fobj) //往文件里面写入内容，得到了一个writer对象
+
+	t := reflect.TypeOf(Properties)
+	v := reflect.ValueOf(Properties)
+	n := t.Elem().NumField()
+	for i := 0; i < n; i++ {
+		field := t.Elem().Field(i)
+		fieldVal := v.Elem().Field(i)
+		key, ok := field.Tag.Lookup("cfg")
+		// 没有 cfg tag，直接跳过
+		if !ok {
+			continue
+		}
+		switch field.Type.Kind() {
+		case reflect.String:
+			if fieldVal.Len() > 0 {
+				_, _ = writer.WriteString(fmt.Sprintf("%s %s\n", key, fieldVal.String()))
+			}
+		case reflect.Int:
+			_, _ = writer.WriteString(fmt.Sprintf("%s %d\n", key, fieldVal.Int()))
+		case reflect.Bool:
+			if fieldVal.Bool() {
+				_, _ = writer.WriteString(fmt.Sprintf("%s yes\n", key))
+			} else {
+				_, _ = writer.WriteString(fmt.Sprintf("%s no\n", key))
+			}
+		case reflect.Slice:
+			var temp []string
+			size := fieldVal.Len()
+			for j:=0;j<size;j++ {
+				temp = append(temp, fieldVal.Index(i).String())
+			}
+			if size > 0 {
+				_, _ = writer.WriteString(fmt.Sprintf("%s %s\n", key, strings.Join(temp, ",")))
+			}
+		}
+	}
+	_ = writer.Flush() //将缓存中内容的写入文件
 }

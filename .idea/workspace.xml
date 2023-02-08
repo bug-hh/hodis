@@ -5,13 +5,26 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ca7db3ff-d765-494d-9330-d429c5ccb6d9" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README_CN.md" beforeDir="false" afterPath="$PROJECT_DIR$/README_CN.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/aof/aof.go" beforeDir="false" afterPath="$PROJECT_DIR$/aof/aof.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/aof/rdb.go" beforeDir="false" afterPath="$PROJECT_DIR$/aof/rdb.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/aof/rewrite.go" beforeDir="false" afterPath="$PROJECT_DIR$/aof/rewrite.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cluster/cluster.go" beforeDir="false" afterPath="$PROJECT_DIR$/cluster/cluster.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/config/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/database.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/database.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/database/rdb.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/rdb.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/database/replication.go" beforeDir="false" afterPath="$PROJECT_DIR$/database/replication.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/datastruct/rax/rax.go" beforeDir="false" afterPath="$PROJECT_DIR$/datastruct/rax/rax.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pubsub/pubsub.go" beforeDir="false" afterPath="$PROJECT_DIR$/pubsub/pubsub.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/redis/parser/parser.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/parser/parser.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.mod" beforeDir="false" afterPath="$PROJECT_DIR$/go.mod" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/go.sum" beforeDir="false" afterPath="$PROJECT_DIR$/go.sum" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis_master.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_master.conf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis_sentinel.conf" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis_slave_1.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_slave_1.conf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis_slave_2.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_slave_2.conf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hodis_slave_3.conf" beforeDir="false" afterPath="$PROJECT_DIR$/hodis_slave_3.conf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/utils/utils.go" beforeDir="false" afterPath="$PROJECT_DIR$/lib/utils/utils.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/main.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/redis/protocol/consts.go" beforeDir="false" afterPath="$PROJECT_DIR$/redis/protocol/consts.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sentinel/sentinel_server.go" beforeDir="false" afterPath="$PROJECT_DIR$/sentinel/sentinel_server.go" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

@@ -19,6 +19,18 @@ import (
 )
 
 func sendRDBFile(conn redis.Connection) error {
+	if !utils.PathExists(config.Properties.RDBFilename) {
+		logger.Warn("[send rdb file] rdb file ", config.Properties.RDBFilename, " not exists")
+		/*
+		因为没有生成 rdb 文件，所以个 slave 发个空回复
+		 */
+		sendErr := conn.Write(protocol.MakeNullBulkReply().ToBytes())
+		if sendErr != nil {
+			logger.Info("send empty rdb error: ", sendErr.Error())
+			return sendErr
+		}
+		return nil
+	}
 	rdbFile, err := os.Open(config.Properties.RDBFilename)
 	if err != nil {
 		logger.Error("open rdb file failed " + err.Error())

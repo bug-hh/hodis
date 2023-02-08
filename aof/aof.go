@@ -40,13 +40,14 @@ type Handler struct {
 	currentDB int
 }
 
-func NewAOFHandler(db database.EmbedDB, tmpDBMaker func() database.EmbedDB) (*Handler, error) {
+func NewAOFHandler(db database.EmbedDB, replFunc func(cmdLine [][]byte, index int), tmpDBMaker func() database.EmbedDB) (*Handler, error) {
 	handler := &Handler{}
 	handler.aofFilename = config.Properties.AppendFilename
 	handler.db = db
 	handler.tmpDBMaker = tmpDBMaker
-	// 读取已有的 aof 文件
-	handler.LoadAof(0)
+	// 读取已有的 aof 文件, 节点初始化，执行 aof 文件里的命令时，不会再次写入这些命令到 aof 文件中，
+	// 因为当前处理 aof 的协程没有启动，管道也没有初始化
+	handler.LoadAof(0, replFunc)
 	// 打开这个 aof 文件，获取文件描述符
 	aofFile, err := os.OpenFile(handler.aofFilename, os.O_APPEND | os.O_CREATE | os.O_RDWR, 0600)
 	if err != nil {
@@ -89,7 +90,7 @@ func (handler *Handler) handleAof() {
 }
 
 // read aof file
-func (handler *Handler) LoadAof(maxBytes int) {
+func (handler *Handler) LoadAof(maxBytes int, replFunc func(cmdLine [][]byte, index int)) {
 	// delete aofChan to prevent write again
 	/*
 	删除这个 aofChan 的原因是，当存在 aofChan 时，主协程会往里写，然后从协程从里面读，然后往
@@ -101,10 +102,13 @@ func (handler *Handler) LoadAof(maxBytes int) {
 		handler.aofChan = aofChan
 	}(aofChan)
 
+	if !utils.PathExists(handler.aofFilename) {
+		return
+	}
 	file, err := os.Open(handler.aofFilename)
 	if err != nil {
 		if _, ok := err.(*os.PathError); ok {
-			logger.Warn("load aof file path error")
+			logger.Warn("load aof file path error: ", handler.aofFilename)
 			return
 		}
 		logger.Warn(err)
@@ -124,6 +128,7 @@ func (handler *Handler) LoadAof(maxBytes int) {
 	ch := parser.ParseStream(reader)
 	// 创建一个伪客户端来执行 aof 文件里的命令
 	fakeConn := &connection.FakeConn{}
+	i := 0
 	for p := range ch {
 		if p.Err != nil {
 			if p.Err == io.EOF {
@@ -144,6 +149,11 @@ func (handler *Handler) LoadAof(maxBytes int) {
 			logger.Error("require multi bulk protocol")
 			continue
 		}
+
+		// 如果是一个 master，需要填充复制缓冲区
+		replFunc(r.Args, i)
+		i++
+
 		ret := handler.db.Exec(fakeConn, r.Args)
 		if protocol.IsErrorReply(ret) {
 			logger.Error("exec err", ret.ToBytes())

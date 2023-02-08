@@ -7,6 +7,7 @@ import (
 	"github.com/hodis/database"
 	"github.com/hodis/datastruct/dict"
 	"github.com/hodis/interface/redis"
+	"github.com/hodis/lib/idgenerator"
 	"github.com/hodis/lib/logger"
 	"github.com/hodis/lib/utils"
 	"github.com/hodis/redis/connection"
@@ -15,6 +16,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,13 +24,36 @@ import (
 
 const (
 	DICT_SIZE = 1 << 16
+	SMALL_DICT_SIZE = 1 << 3
 	QUORUM = "quorum"
 	DOWN_AFTER_PERIOD = "down_after_milliseconds"
 	MASTER_NAME = "master_name"
 	IP = "ip"
 	PORT = "port"
 	PARALLEL_SYNCS = "parallel_syncs"
+	SENTINEL_CHANNEL = "_sentinel_:hello"
+	SUB_CMD = "subscribe"
 )
+
+const (
+	// 正常在线
+	ONLINE = iota
+	// 主观下线
+	SRI_S_DOWN
+	// 客观下线
+	SRI_O_DOWN
+)
+
+
+const (
+	// 领导者
+	LEADER = iota
+	// 候选者
+	CANDIDATE
+	// 追随者
+	FOLLOWER
+)
+
 
 type SentinelState struct {
 	Masters dict.Dict
@@ -38,8 +63,14 @@ type SentinelRedisInstance struct {
 	// 表示该节点是 master 还是 slave
 	Role int
 
+	// 代表节点状态，主观下线，客观下线，正常在线
+	Flag int
+
 	// 节点名字, 一般是 ip:port
 	Name string
+
+	RunID string
+
 	//实例无响应多少毫秒后，才会被判断为主观下线
 	DownAfterPeriod int
 
@@ -73,8 +104,35 @@ type SentinelServer struct {
 	cmdChanMap map[string]<-chan *parser.Payload
 	subChanMap map[string]<-chan *parser.Payload
 
+	//保存与其他 sentinel 之间的 连接
+	selConnMap map[string]redis.Connection
+	selChanMap map[string]<-chan *parser.Payload
+
+	// 用于记录和 sentinel 连接出现异常的节点的异常起始时间
+	// port:ip -> 异常开始时间
+	pingMap map[string]int64
+
+	// 用于记录「认为指定 node 节点为主观下线状态的 sentinel 节点数」
+	countMap map[string]int
+
 	ctx context.Context
 	cancel context.CancelFunc
+
+	RunID string
+
+	// 配置纪元，等价于 raft 算法中的任期
+	currentEpoch int
+
+	// 这里存放所有其他的 sentinel 实例
+	// ip:port -> SentinelRedisInstance
+	Sentinels dict.Dict
+
+	RaftRole int
+
+	// ip:port
+	RaftLeader string
+
+	mu sync.RWMutex
 }
 
 // 用来存储 info 命令的结果
@@ -95,7 +153,51 @@ type masterInfo struct {
 }
 
 func (s *SentinelServer) Exec(client redis.Connection, cmdLine [][]byte) redis.Reply {
-	return nil
+	cmdName := strings.ToLower(string(cmdLine[0]))
+	size := len(cmdLine)
+	if cmdName == "sentinel" {
+		if size < 2 {
+			return protocol.MakeArgNumErrReply(cmdName)
+		}
+		key := strings.ToLower(string(cmdLine[1]))
+		if key == "is-master-down-by-addr" {
+			if size != 6 {
+				return protocol.MakeArgNumErrReply(cmdName + "is-master-down-by-addr")
+			}
+			ip, portStr, _, _ := string(cmdLine[2]), string(cmdLine[3]), string(cmdLine[4]), string(cmdLine[5])
+			port, err := strconv.Atoi(portStr)
+			if err != nil {
+				return protocol.MakeErrReply("illegal port number: " + portStr)
+			}
+
+			logger.Info("sentinel is-master-down-by-addr", ip, portStr)
+			// 检查 masters 里，对应的节点的状态
+			var target *SentinelRedisInstance
+			s.state.Masters.ForEach(func(key string, val interface{}) bool {
+				sri := val.(*SentinelRedisInstance)
+				masterIP := sri.Addr.Ip
+				masterPort := sri.Addr.Port
+
+				if ip == masterIP && port == masterPort {
+					target = sri
+					return false
+				}
+				return true
+			})
+
+			if target == nil {
+				return protocol.MakeStatusReply(fmt.Sprintf("%s:%d is not a master", ip, portStr))
+			}
+
+			if target.Flag == ONLINE {
+				// 这里多传两个参数 "isMasterDown", target.Name, 方便接收方识别
+				return protocol.MakeMultiBulkReply(utils.ToCmdLine("isMasterDown", target.Name, "0", "*", "0"))
+			}
+
+			return protocol.MakeMultiBulkReply(utils.ToCmdLine("isMasterDown", target.Name, "1", "*", "0"))
+		}
+	}
+	return &protocol.OkReply{}
 }
 
 func (s *SentinelServer) AfterClientClose(c redis.Connection) {
@@ -122,6 +224,7 @@ func parseSentinelStateFromConfig() *SentinelState {
 	for masterName, configMap := range sentinelMap {
 		sri := &SentinelRedisInstance{
 			Role:            database.MasterRole,
+			Flag: 			 ONLINE,
 			Name:            masterName,
 			DownAfterPeriod: configMap[DOWN_AFTER_PERIOD].(int),
 			Quorum:          configMap[QUORUM].(int),
@@ -145,6 +248,19 @@ func NewSentinelServer() *SentinelServer {
 
 		cmdChanMap: make(map[string]<-chan *parser.Payload),
 		subChanMap: make(map[string]<-chan *parser.Payload),
+
+		selConnMap: make(map[string]redis.Connection),
+		selChanMap: make(map[string]<-chan *parser.Payload),
+
+		pingMap: make(map[string]int64),
+
+		countMap: make(map[string]int),
+
+		RunID: idgenerator.GenID(),
+		Sentinels: dict.MakeConcurrent(SMALL_DICT_SIZE),
+
+		// 一开始，大家都是 follower
+		RaftRole: FOLLOWER,
 	}
 	ret.InitSentinel()
 	return ret
@@ -165,27 +281,211 @@ func (s *SentinelServer) InitSentinel() {
 		cmdConn, err := net.Dial("tcp", addr)
 		if err != nil {
 			logger.Warn("cannot connect to %s", addr)
-			return true
 		}
 		//key 是 master name
 		s.cmdConnMap[key] = connection.NewConn(cmdConn)
 		s.cmdChanMap[key] = parser.ParseStream(cmdConn)
 
-		// todo 以后实现订阅连接, 和 订阅 Channel
+		// 实现订阅连接, 和 订阅 Channel
+		// 把 sentinel 当成一个 client，向 master 发 subscribe _sentinel_:hello，
+		// 让 master 建立一个 _sentinel_:hello -> sentinel 的映射关系
+		subConn, err := net.Dial("tcp", addr)
+		if err != nil {
+			logger.Warn("cannot connect to %s", addr)
+			return true
+		}
+		//key 是 master name
+		s.subConnMap[key] = connection.NewConn(subConn)
+		s.subChanMap[key] = parser.ParseStream(subConn)
 
-
+		cmdPayload := utils.ToCmdLine(SUB_CMD, SENTINEL_CHANNEL)
+		_, err = subConn.Write(protocol.MakeMultiBulkReply(cmdPayload).ToBytes())
+		if err != nil {
+			logger.Warn("cannot establish sub connection to master")
+		}
 		return true
 	})
 
-	// 根据建立的连接，每隔 10s 给 master 和 slave 发 info 命令
+	// 根据建立的连接，
+	// 		每隔 10s 给 master 和 slave 发 info 命令
+	//      每隔 2s 在 _sentinel_:hello 通道上发送 sentinel addr 和 master addr
+	//      每隔 1s 给所有其他节点发送 ping 命令，根据结果来标记 master 是否为主观下线状态
 	logger.Info("startSentinelCron")
 	s.startSentinelCron()
 
-	// 逐个读取每个 master/slave 的 info 回复
+	// 逐个读取每个 master/slave 的 info/ping 回复
 	s.receiveMasterOrSlaveResp()
+
+	//  因为订阅了 _sentinel_:hello 频道，所以要读取该频道上的消息
+	s.receiveMsgFromChannel()
+
+	// 读取来自其他 sentinel 的回复
+	s.receiveMsgFromSentinel()
+
+}
+
+func (s *SentinelServer) parseMsgFromChannel(payload *parser.Payload) {
+	if payload.Err != nil {
+		return
+	}
+	payloadStr := string(payload.Data.ToBytes())
+
+	if payloadStr[0] != '*' {
+		return
+	}
+	/*
+	*3\r\n
+	$7\r\n
+	message\r\n
+	$16\r\n
+	_sentinel_:hello\r\n
+	$44\r\n
+	127.0.0.1,26379,2LFfPJQiB9N6yAQjKzhs8zzxQ5I\r\n
+	*/
+	ls := strings.Split(payloadStr, "\r\n")
+	i := 2
+	n := len(ls)
+	if i < n && ls[2] == "message" {
+		msg := ls[6]
+		ls = strings.Split(msg, ",")
+		ip, portStr, runID := ls[0], ls[1], ls[2]
+		port, _ := strconv.Atoi(portStr)
+		if ip == config.Properties.Bind && port == config.Properties.Port {
+
+			return
+		}
+		// 记录其他 sentinel
+		sri := &SentinelRedisInstance{
+			Role:            database.SentinelRole,
+			Name: fmt.Sprintf("%s:%d", ip, port),
+			RunID:           runID,
+			Addr:            &SentinelAddr{
+				Ip:   ip,
+				Port: port,
+			},
+		}
+
+		_, exists := s.Sentinels.Get(sri.Name)
+		// 这是一个新增的 sentinel，那么需要和这个 sentinel 建立连接
+		// sentinel 之间，只建立命令连接
+		if !exists {
+			cmdConn, err := net.Dial("tcp", sri.Name)
+			if err != nil {
+				logger.Warn("cannot connect to new sentinel: %s", sri.Name)
+			}
+
+			//logger.Info("connect to a new sentinel server: ", sri.Name)
+			newConn := connection.NewConn(cmdConn)
+			s.selConnMap[sri.Name] = newConn
+			s.selChanMap[sri.Name] = parser.ParseStream(cmdConn)
+		}
+		s.Sentinels.Put(sri.Name, sri)
+	}
+}
+
+func (s *SentinelServer) parseMsgFromSentinel(payload *parser.Payload) {
+	if payload.Err != nil {
+		return
+	}
+	payloadStr := string(payload.Data.ToBytes())
+
+	if payloadStr[0] != '*' {
+		return
+	}
+
+	ls := strings.Split(payloadStr, "\r\n")
+	nodeName := ls[4]
+	isMasterDown := len(ls) > 6 && ls[6] == "1"
+	if isMasterDown {
+		s.countMap[nodeName]++
+		quorum, ok := config.Properties.Sentinel[nodeName]["quorum"]
+		if !ok {
+			quorum = 2
+		}
+		// 标记为客观下线
+		if s.countMap[nodeName] >= quorum.(int) {
+			// 它是一个主节点
+			raw, sriExists := s.state.Masters.Get(nodeName)
+			if sriExists {
+				sri := raw.(*SentinelRedisInstance)
+				if sri.Flag == SRI_S_DOWN {
+					sri.Flag = SRI_O_DOWN
+					s.state.Masters.Put(nodeName, sri)
+				}
+				return
+			}
+
+			// 它是一个从节点
+			s.state.Masters.ForEach(func(key string, val interface{}) bool {
+				masterSri := val.(*SentinelRedisInstance)
+				slaveSriRaw, slaveExists := masterSri.Slaves.Get(nodeName)
+				if slaveExists {
+					//  标记为客观下线
+					slaveSri := slaveSriRaw.(*SentinelRedisInstance)
+					if slaveSri.Flag == SRI_S_DOWN {
+						slaveSri.Flag = SRI_O_DOWN
+					}
+					return false
+				}
+				return true
+			})
+
+		}
+
+	}
+}
+
+func (s *SentinelServer) receiveMsgFromSentinel() {
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				logger.Error("panic", err)
+			}
+		}()
+		for {
+			for _, channel := range s.selChanMap {
+				select {
+				case payload := <-channel:
+					if payload.Err != nil {
+						logger.Info("receive master/slave response error, ", payload.Err)
+					}
+					// 拿到解析信息后，开始更新
+					s.parseMsgFromSentinel(payload)
+				default:
+					continue
+				}
+			}
+		}
+	}()
+
+}
+func (s *SentinelServer) receiveMsgFromChannel() {
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				logger.Error("panic", err)
+			}
+		}()
+		for {
+			for _, channel := range s.subChanMap {
+				select {
+				case payload := <-channel:
+					if payload.Err != nil {
+						logger.Info("receive master/slave response error, ", payload.Err)
+					}
+					// 拿到解析信息后，开始更新
+					s.parseMsgFromChannel(payload)
+				default:
+					continue
+				}
+			}
+		}
+	}()
+
 }
 
 // 这里用来接收 sentinel 向 master 和 slave 发出 info 命令后，收到的回答
+// 或者接受 sentinel 向其他节点发送 ping 命令后，收到的回答
 func (s *SentinelServer) receiveMasterOrSlaveResp() {
 	go func() {
 		defer func() {
@@ -200,12 +500,16 @@ func (s *SentinelServer) receiveMasterOrSlaveResp() {
 					if payload.Err != nil {
 						logger.Info("receive master/slave response error, ", payload.Err)
 					}
-					logger.Info("收到来自 ", name, " 的 info 信息")
-					// 拿到解析信息后，开始更新
+					// 将 payload 当做 ping 命令回复解析
+					if parsePing(payload, s, name) {
+						continue
+					}
+
+					// 将 payload 当做 info 命令回复解析
 					mi, si := parseInfoFromMasterOrSlave(payload)
 					if si == nil || len(si) == 0 {
 						// 如果这是一个 master 反馈回来的，那么就应该清除这个 master 下的所有 slave
-						// 首先要判断它是不是一个master
+						// 首先要判断它是不是一个 master
 						raw, exists := s.state.Masters.Get(name)
 						if exists {
 							sri, _ := raw.(*SentinelRedisInstance)
@@ -374,6 +678,25 @@ func (s *SentinelServer) receiveMasterOrSlaveResp() {
 	}()
 }
 
+
+func parsePing(payload *parser.Payload, s *SentinelServer, nodeName string) bool {
+	// 表示 payload 不是对 ping 的回复
+	if payload.Data.ToBytes()[0] == '*' {
+		return false
+	}
+
+	payloadStr := strings.TrimSpace(strings.ToLower(string(payload.Data.ToBytes())))
+	// 这里认为没有回复 pong 就是异常，进行主观下线标记
+	if payloadStr != "+pong" {
+		logger.Info(fmt.Sprintf("ping 回复异常: %s", payloadStr))
+		s.markAsSubjectDown(nodeName)
+	} else {
+		// 连接正常, 如果之前存在异常，那么现在清除掉异常标记
+		s.markAsOnline(nodeName)
+	}
+	return true
+}
+
 func parseInfoFromMasterOrSlave(payload *parser.Payload) (*masterInfo, []*slaveInfo){
 	payloadStr := string(payload.Data.ToBytes())
 	if payloadStr[0] != '*' {
@@ -419,40 +742,312 @@ func parseInfoFromMasterOrSlave(payload *parser.Payload) (*masterInfo, []*slaveI
 }
 
 func (s *SentinelServer) startSentinelCron() {
+	// 每隔 10s 发送 info 命令
+	execTask(10, s.sentinelCron)
+
+	// 每隔 2s 在 _sentinel_:hello 频道上发送 sentinel addr 和 master addr
+	execTask(2, s.sentinelPub)
+
+	// 每隔 1s 向其他节点发送 ping 命令
+	execTask(1, s.sentinelPing)
+
+	// 每隔 10s 检查一次是否有节点是主观下线状态
+	execTask(10, s.sentinelCheckNodeSubjectDown)
+
+	// 每隔 15s 检查一次是否有节点是客观下线状态
+	execTask(15, s.sentinelCheckMasterObjectDown)
+}
+
+// 执行定时任务
+func execTask(interval int, task func()) {
 	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logger.Error("panic", err)
-			}
-		}()
-		ticker := time.Tick(10 * time.Second)
+		//defer func() {
+		//	if err := recover(); err != nil {
+		//		logger.Error("panic", err)
+		//	}
+		//}()
+		ticker := time.Tick(time.Duration(interval) * time.Second)
 		for range ticker {
-			s.sentinelCron()
+			task()
 		}
 	}()
-
 }
 
 func (s *SentinelServer) sentinelCron() {
 	// 给每个 master 和 slave 发 info 命令
-	for addr, conn := range s.cmdConnMap {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, conn := range s.cmdConnMap {
 		infoCmdLine := utils.ToCmdLine("info")
 		infoReq := protocol.MakeMultiBulkReply(infoCmdLine)
 		err := conn.Write(infoReq.ToBytes())
 		if err != nil {
-			msg := fmt.Sprintf("send info to master %s faild %s", addr, err.Error())
+			//msg := fmt.Sprintf("send info to master %s faild %s", addr, err.Error())
+			//logger.Error(msg)
+		}
+	}
+}
+
+func (s *SentinelServer) sentinelPub() {
+	// 通过 _sentinel_:hello 频道发送 sentinel addr 和 master addr
+	message := fmt.Sprintf("%s,%d,%s", config.Properties.Bind, config.Properties.Port, s.RunID)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, conn := range s.subConnMap {
+		pubCmdLine := utils.ToCmdLine("publish", SENTINEL_CHANNEL, message)
+		pubReq := protocol.MakeMultiBulkReply(pubCmdLine)
+		err := conn.Write(pubReq.ToBytes())
+		if err != nil {
+			//msg := fmt.Sprintf("publish message to master %s faild %s", addr, err.Error())
+			//logger.Error(msg)
+		}
+	}
+}
+
+func (s *SentinelServer) markAsOnline(nodeName string) {
+	delete(s.pingMap, nodeName)
+	raw, sriExists := s.state.Masters.Get(nodeName)
+	if !sriExists {
+		return
+	}
+	//  标记为在线
+	sri := raw.(*SentinelRedisInstance)
+	if sri.Flag == ONLINE {
+		return
+	}
+	sri.Flag = ONLINE
+	s.state.Masters.Put(nodeName, sri)
+}
+
+func (s *SentinelServer) markAsSubjectDown(nodeName string) {
+	t, exists := s.pingMap[nodeName]
+	downAfterMS, ok := config.Properties.Sentinel[nodeName]["down-after-milliseconds"].(int64)
+	if !ok {
+		// 如果配置文件里没配置，则使用默认值
+		downAfterMS = 30000
+	}
+	// 表示之前就出现过异常
+	if exists {
+		now := time.Now().UnixMilli()
+		// 表示从首次异常开始，downAfterMS 毫秒内，第二次出现异常
+		// 现在我们认为在 downAfterMS 内，nodeName 连续两次异常，将它标记为主观下线
+		if now < t + downAfterMS {
+			// 找到它的 sri
+			raw, sriExists := s.state.Masters.Get(nodeName)
+			// 它是一个主节点
+			if sriExists {
+				//  标记为主观下线
+				sri := raw.(*SentinelRedisInstance)
+				if sri.Flag == ONLINE {
+					sri.Flag = SRI_S_DOWN
+					s.countMap[nodeName] = 1
+					s.state.Masters.Put(nodeName, sri)
+				}
+				return
+			}
+
+			// 它是一个从节点
+			s.state.Masters.ForEach(func(key string, val interface{}) bool {
+				masterSri := val.(*SentinelRedisInstance)
+				slaveSriRaw, slaveExists := masterSri.Slaves.Get(nodeName)
+				if slaveExists {
+					//  标记为主观下线
+					slaveSri := slaveSriRaw.(*SentinelRedisInstance)
+					if slaveSri.Flag == ONLINE {
+						slaveSri.Flag = SRI_S_DOWN
+					}
+					return false
+				}
+				return true
+			})
+			return
+		}
+	}
+	s.pingMap[nodeName] = time.Now().UnixMilli()
+}
+
+// 从 master 里删除 ping 超时的 slave, 关闭和清理该 slave 相关的连接
+func (s *SentinelServer) deleteSlave(nodeName string) {
+	s.state.Masters.ForEach(func(key string, val interface{}) bool {
+		sri := val.(*SentinelRedisInstance)
+		sri.Slaves.Remove(nodeName)
+		return true
+	})
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if c, ok := s.cmdConnMap[nodeName]; ok {
+		cc := c.(*connection.Connection)
+		_ = cc.Close()
+	}
+	delete(s.cmdConnMap, nodeName)
+
+	if c, ok := s.subConnMap[nodeName]; ok {
+		cc := c.(*connection.Connection)
+		_ = cc.Close()
+	}
+	delete(s.subConnMap, nodeName)
+
+
+}
+
+func (s *SentinelServer) sentinelPing() {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for addr, conn := range s.cmdConnMap {
+		pingCmdLine := utils.ToCmdLine("ping")
+		pingReq := protocol.MakeMultiBulkReply(pingCmdLine)
+		err := conn.Write(pingReq.ToBytes())
+		if err != nil {
+			// 将对应的 master/slave 标记为主观下线
+			s.markAsSubjectDown(addr)
+			//msg := fmt.Sprintf("send ping to master/slave %s faild %s", addr, err.Error())
+			//logger.Error(msg)
+		} else {
+			s.markAsOnline(addr)
+		}
+	}
+
+	for addr, conn := range s.selConnMap {
+		pingCmdLine := utils.ToCmdLine("ping")
+		pingReq := protocol.MakeMultiBulkReply(pingCmdLine)
+		err := conn.Write(pingReq.ToBytes())
+		if err != nil {
+			msg := fmt.Sprintf("send ping to sentinel %s faild %s", addr, err.Error())
 			logger.Error(msg)
 		}
 	}
 }
 
+func (s *SentinelServer) sentinelCheckMasterObjectDown() {
+	var downMaster, newMaster *SentinelRedisInstance
+	var downMasterName string
+	var otherSlavesAddr []string
+	s.state.Masters.ForEach(func(key string, val interface{}) bool {
+		sri := val.(*SentinelRedisInstance)
+		if sri.Flag == SRI_O_DOWN {
+			downMaster = sri
+			downMasterName = key
+			return false
+		}
+		return true
+	})
+	// 从 down 掉的 master 中找一台在线的 slave，把这台 slave 变成 master, 并对所有 slave 节点执行 slaveof no one
+	if downMaster != nil {
+		downMsg := fmt.Sprintf("检测到 %s:%d 客观下线", downMaster.Addr.Ip, downMaster.Addr.Port)
+		logger.Info(downMsg)
+
+		downMaster.Slaves.ForEach(func(key string, val interface{}) bool {
+			slaveSri := val.(*SentinelRedisInstance)
+			if slaveSri.Flag == ONLINE {
+				//  给 slave 发送 slaveof no one
+				cmdLine := utils.ToCmdLine("slaveof", "no", "one")
+				err := s.cmdConnMap[slaveSri.Name].Write(protocol.MakeMultiBulkReply(cmdLine).ToBytes())
+				if err != nil {
+					msg := fmt.Sprintf("send slaveof no one to %s failed", slaveSri.Name)
+					logger.Error(msg)
+					return true
+				}
+				if newMaster == nil {
+					newMaster = slaveSri
+				} else {
+					otherSlavesAddr = append(otherSlavesAddr, slaveSri.Name)
+				}
+			}
+			return true
+		})
+
+		// 让其余 slave 执行 slaveof newMasterIP newMasterPort
+		for _, addr := range otherSlavesAddr {
+			cmdLine := utils.ToCmdLine("slaveof", newMaster.Addr.Ip, fmt.Sprintf("%d", newMaster.Addr.Port))
+			err := s.cmdConnMap[addr].Write(protocol.MakeMultiBulkReply(cmdLine).ToBytes())
+			if err != nil {
+				msg := fmt.Sprintf("send slaveof %s %d to %s failed", newMaster.Addr.Ip, newMaster.Addr.Port, newMaster.Name)
+				logger.Error(msg)
+			}
+		}
+
+		// 把这台下线 master 从 sentinel 里删除
+		s.state.Masters.Remove(downMasterName)
+		s.mu.Lock()
+		delete(s.cmdConnMap, downMasterName)
+		delete(s.subConnMap, downMasterName)
+		delete(s.cmdChanMap, downMasterName)
+		delete(s.subChanMap, downMasterName)
+		delete(s.pingMap, downMasterName)
+		delete(s.countMap, downMasterName)
+
+		// 更新 sentinel 配置
+		config.Properties.Sentinel[newMaster.Name] = make(map[string]interface{})
+		for k, v := range config.Properties.Sentinel[downMasterName] {
+			config.Properties.Sentinel[newMaster.Name][k] = v
+		}
+		// 只有 ip 和 port 要改，其余继承自 oldMaster
+		config.Properties.Sentinel[newMaster.Name]["ip"] = newMaster.Addr.Ip
+		config.Properties.Sentinel[newMaster.Name]["port"] = newMaster.Addr.Port
+		delete(config.Properties.Sentinel, downMasterName)
+		s.mu.Unlock()
+	}
+}
+
+func (s *SentinelServer) sentinelCheckNodeSubjectDown() {
+	s.state.Masters.ForEach(func(key string, val interface{}) bool {
+		sri := val.(*SentinelRedisInstance)
+		// 如果有 master 被标记为主观下线，那么开始检查是否客观下线
+		if sri.Flag == SRI_S_DOWN {
+			// 有一种特殊情况，只有一个 sentinel，那么这种情况下，直接标记为客观下线
+			if s.Sentinels.Len() == 0 {
+				sri.Flag = SRI_O_DOWN
+			} else {
+				// 开始询问其他 sentinel
+				s.sendIsNodeDown(sri)
+			}
+		} else if sri.Flag == ONLINE {
+			// 对于在线的主节点，检查他们的 slave 节点，是否有标记为主观下线的状态
+			var sris []*SentinelRedisInstance
+			sri.Slaves.ForEach(func(key string, val interface{}) bool {
+				slaveSri := val.(*SentinelRedisInstance)
+				if slaveSri.Flag == SRI_S_DOWN {
+					logger.Info(fmt.Sprintf("发现 slave %s:%d 处于主观下线状态", slaveSri.Addr.Ip, slaveSri.Addr.Port))
+					sris = append(sris, slaveSri)
+				}
+				return true
+			})
+
+			for _, item := range sris {
+				s.sendIsNodeDown(item)
+			}
+		}
+		return true
+	})
+
+}
+
+func (s *SentinelServer) sendIsNodeDown(sri *SentinelRedisInstance) {
+	// 开始询问其他 sentinel
+	s.Sentinels.ForEach(func(key string, val interface{}) bool {
+		sentinelSri := val.(*SentinelRedisInstance)
+		portStr := strconv.Itoa(sri.Addr.Port)
+		cmdLine := utils.ToCmdLine("sentinel", "is-master-down-by-addr", sri.Addr.Ip, portStr, "0", sri.RunID)
+		senConn, ok := s.selConnMap[sentinelSri.Name]
+		if !ok {
+			return true
+		}
+		err := senConn.Write(protocol.MakeMultiBulkReply(cmdLine).ToBytes())
+		if err != nil {
+			logger.Error("ask other sentinel for master down failed")
+		}
+		return true
+	})
+}
 
 func getSlaveInfoFromMaster(name, value string, slaveInfos *[]*slaveInfo) {
 	// ip=127.0.0.1,port=54596,state=online,offset=0,lag=63810053011
 	var err error
 	si := &slaveInfo{}
 	slaveInfoList := strings.Split(value, ",")
-	logger.Info("len(slaveInfoList): ", len(slaveInfoList))
+	//logger.Info("len(slaveInfoList): ", len(slaveInfoList))
 	if len(slaveInfoList) < 5 {
 		return
 	}

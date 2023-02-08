@@ -37,6 +37,8 @@ type Cluster struct {
 
 	idGenerator *idgenerator.IDGenerator
 
+	RunID string
+
 	// use a variable to allow injecting stub for testing
 	relayImpl func(cluster *Cluster, node string, c redis.Connection, cmdLine database.CmdLine) redis.Reply
 }
@@ -56,6 +58,8 @@ func MakeCluster() *Cluster {
 		peerConnection: make(map[string]*pool.ObjectPool),
 
 		idGenerator: idgenerator.MakeGenerator(config.Properties.Self),
+
+		RunID: idgenerator.GenID(),
 		relayImpl: defaultRelayImpl,
 	}
 

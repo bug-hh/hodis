@@ -53,6 +53,24 @@ func MakeOkReply() *OkReply {
 	return theOkReply
 }
 
+
+// OkReply is +OK
+type OOKKReply struct{}
+
+var OOKKBytes = []byte("+OOKK\r\n")
+
+// ToBytes marshal redis.Reply
+func (r *OOKKReply) ToBytes() []byte {
+	return OOKKBytes
+}
+
+var theOOKKReply = new(OOKKReply)
+
+// MakeOkReply returns a ok protocol
+func MakeOOKKReply() *OOKKReply {
+	return theOOKKReply
+}
+
 // 事务相关，命令入队 reply
 // QueuedReply is +QUEUED
 type QueuedReply struct{}

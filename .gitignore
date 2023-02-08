@@ -27,3 +27,7 @@ redis-sentinel-test/
 *.rdb
 
 info_resp.txt
+
+*.aof
+
+*.pprof

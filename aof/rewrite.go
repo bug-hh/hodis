@@ -83,7 +83,7 @@ func (handler *Handler) DoRewrite(ctx *RewriteCtx) error {
 	// 重新克隆了一个空数据库
 	tmpAof := handler.newRewriteHandler()
 	// 然后按照 aof 文件，往这个空数据库里写数据
-	tmpAof.LoadAof(int(ctx.fileSize))
+	tmpAof.LoadAof(int(ctx.fileSize), func(cmdLine [][]byte, index int) {})
 
 	for i := 0; i < config.Properties.Databases; i++ {
 		data := protocol.MakeMultiBulkReply(utils.ToCmdLine("SELECT", strconv.Itoa(i))).ToBytes()

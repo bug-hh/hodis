@@ -17,6 +17,7 @@ import (
 )
 
 func (handler *Handler) Rewrite2RDB() error {
+	// 在 ctx 中设置好 aof 文件名和文件大小
 	ctx, err := handler.startRewrite2RDB()
 	if err != nil {
 		return err
@@ -25,6 +26,7 @@ func (handler *Handler) Rewrite2RDB() error {
 	rdbFilename := config.Properties.RDBFilename
 	if rdbFilename == "" {
 		rdbFilename = "dump.rdb"
+		config.Properties.RDBFilename = rdbFilename
 	}
 	err = ctx.tmpFile.Close()
 	if err != nil {
@@ -63,7 +65,8 @@ func (handler *Handler) startRewrite2RDB() (*RewriteCtx, error) {
 
 func (handler *Handler) rewrite2DB(ctx *RewriteCtx) error {
 	tmpHandler := handler.newRewriteHandler()
-	tmpHandler.LoadAof(int(ctx.fileSize))
+	// 用 aof 文件生成 临时 db，然后把 db 转换成 rdb 文件
+	tmpHandler.LoadAof(int(ctx.fileSize), func(cmdLine [][]byte, index int) {})
 	encoder := rdb.NewEncoder(ctx.tmpFile).EnableCompress()
 	err := encoder.WriteHeader()
 	if err != nil {

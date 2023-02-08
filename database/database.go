@@ -7,12 +7,13 @@ import (
 	"github.com/hodis/datastruct/list"
 	"github.com/hodis/interface/database"
 	"github.com/hodis/interface/redis"
+	"github.com/hodis/lib/idgenerator"
 	"github.com/hodis/lib/logger"
 	"github.com/hodis/lib/utils"
 	"github.com/hodis/pubsub"
 	"github.com/hodis/redis/connection"
 	"github.com/hodis/redis/protocol"
-	"runtime/debug"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -43,11 +44,22 @@ type MultiDB struct {
 	slowLogList *list.LinkedList
 	slowLogLogSlowerThan int64
 	slowLogMaxLen int
+
+	RunID string
+}
+
+func (mdb *MultiDB) GetRole() int32 {
+	return mdb.role
+}
+
+func (mdb *MultiDB) GetRepl() *replicationStatus {
+	return mdb.replication
 }
 
 func NewStandaloneServer() *MultiDB {
 	mdb := &MultiDB{
 		slaves: make(map[string]redis.Connection),
+		RunID: idgenerator.GenID(),
 	}
 	if config.Properties.Databases == 0 {
 		// 默认 16 个数据库
@@ -65,6 +77,12 @@ func NewStandaloneServer() *MultiDB {
 	// 发布和订阅功能
 	mdb.hub = pubsub.MakeHub()
 
+	// 主从模式复制
+	mdb.replication = initReplStatus()
+
+	// 初始化时，默认自己是 master
+	mdb.role = MasterRole
+
 	// aof 功能
 	validAof := false
 	if config.Properties.AppendOnly {
@@ -73,13 +91,33 @@ func NewStandaloneServer() *MultiDB {
 		先读取已有的 aof 文件，然后开启子协程，从 channel 里读主协程写入的命令，
 		然后往 aof 文件里写入读到的命令
 		 */
-		aofHandler, err := aof.NewAOFHandler(mdb, func() database.EmbedDB {
+
+		/*
+		这个 replFunc 用于在服务器初始化时，把 aof 文件里的命令写入复制缓冲区
+		 */
+		count := 0
+		replFunc := func(cmd [][]byte, index int) {
+			if mdb.role == MasterRole {
+				mdb.replication.replBuffer[index] = cmd
+				for _, bs := range cmd {
+					fmt.Printf("%s", string(bs))
+					fmt.Printf(" ")
+				}
+				fmt.Printf("\n")
+				count = index
+			}
+		}
+		aofHandler, err := aof.NewAOFHandler(mdb, replFunc, func() database.EmbedDB {
 			return MakeBasicMultiDB()
 		})
 
 		if err != nil {
 			panic(err)
 		}
+
+		// count 从 0 开始的，即：count 其实是索引，所以下一个位置应该是 count+1
+		mdb.replication.replOffset = int64(count+1)
+		logger.Info(fmt.Sprintf("count: %d, len(replBuff): %d", count, len(mdb.replication.replBuffer)))
 
 		mdb.aofHandler = aofHandler
 		for _, db := range mdb.dbSet {
@@ -93,8 +131,9 @@ func NewStandaloneServer() *MultiDB {
 	}
 
 	// todo 以后自己实现 rdb 解析
-	// 按照 redis 的实现，如果开启了 aof，就不会使用 rdb
+	// 按照 redis 的实现，如果开启了 aof，就不会加载 rdb 文件了
 	if config.Properties.RDBFilename != "" && !validAof {
+		logger.Info("load rdb file")
 		loadRdbFile(mdb)
 	}
 
@@ -114,11 +153,7 @@ func NewStandaloneServer() *MultiDB {
 		mdb.slowLogMaxLen = 100
 	}
 
-	// 主从模式复制
-	mdb.replication = initReplStatus()
 	mdb.startReplCron()
-	// 初始化时，默认自己是 master
-	mdb.role = MasterRole
 
 	return mdb
 }
@@ -175,12 +210,12 @@ func (mdb *MultiDB) GetDBSize(dbIndex int) (int, int) {
 
 // 实现 DB 接口里的所有方法，从而实现 redis 风格的数据库存储引擎
 func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Reply) {
-	defer func() {
-		if err := recover(); err != nil {
-			logger.Warn(fmt.Sprintf("error occurs: %v\n%s", err, string(debug.Stack())))
-			result = &protocol.UnknownErrReply{}
-		}
-	}()
+	//defer func() {
+	//	if err := recover(); err != nil {
+	//		logger.Warn(fmt.Sprintf("error occurs: %v\n%s", err, string(debug.Stack())))
+	//		result = &protocol.UnknownErrReply{}
+	//	}
+	//}()
 
 	cmdName := strings.ToLower(string(cmdLine[0]))
 	//if cmdName != "ping" && cmdName != "replconf" {
@@ -259,6 +294,7 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 			}
 			// master 需要处理来自 slave 的 offset，如果 offset 与 master 记录的 offset 有偏差，证明主从不一致，需要同步命令
 			if slaveReplOffset < mdb.replication.replOffset {
+				logger.Info(fmt.Sprintf("slaveReplOffset: %d, maseterOffset: %d", slaveReplOffset, mdb.replication.replOffset))
 				go sendCmdToSlave(slaveReplOffset, mdb, c)
 			}
 			return protocol.MakeOkReply()
@@ -278,8 +314,9 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		if string(cmdLine[1]) == "?" && string(cmdLine[2]) == "-1" {
 			go SaveAndSendRDB(mdb, c)
 			// 向 slave 节点发送 +fullsync runId offset 的回复
-			// 这里我们直接用 master 的 ip:port 地址作为 runId 来回复，这时的 offset 为 0
-			msg := fmt.Sprintf("fullsync %s:%d 0", config.Properties.Bind, config.Properties.Port)
+			// 这里我们直接用 master 的 ip:port 地址作为 runId 来回复，因为是完整重同步，直接给 slave 发送 rdb 文件，
+			// 而 rdb 文件是通过 aof 文件生成的，所以这里的 offset 就是 mdb.replication.replOffset
+			msg := fmt.Sprintf("fullsync %s:%d %d", config.Properties.Bind, config.Properties.Port, mdb.replication.replOffset)
 			return protocol.MakeStatusReply(msg)
 		} else {
 			// 收到来自 slave 节点的部分重同步命令
@@ -290,19 +327,30 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 				return protocol.MakeErrReply("illegal slave replication offset")
 			}
 			// 进行完整重同步
-			if runId != fmt.Sprintf("%s:%d", config.Properties.Bind, config.Properties.Port) {
+			if runId != fmt.Sprintf("%s:%d", config.Properties.Bind, config.Properties.Port) || offset == 0 {
 				msg := fmt.Sprintf("fullsync %s:%d 0", config.Properties.Bind, config.Properties.Port)
 				go SaveAndSendRDB(mdb, c)
 				return protocol.MakeStatusReply(msg)
 			}
 			// 进行部分重同步
+			// 先回复 slave continue
+			_ = c.Write(protocol.MakeStatusReply("continue").ToBytes())
+			logger.Info(fmt.Sprintf("部分重同步命令：i = %d, replOffset = %d", offset, mdb.replication.replOffset))
+			// 这里 slave 发来的 offset，表示已经同步到了 offset
 			for i:=offset;i<mdb.replication.replOffset;i++ {
+				for _, bs := range mdb.replication.replBuffer[i] {
+					fmt.Printf("%s", string(bs))
+					fmt.Printf(" ")
+				}
+				fmt.Printf("\n")
 				syncReq := protocol.MakeMultiBulkReply(mdb.replication.replBuffer[i])
 				ret := c.Write(syncReq.ToBytes())
 				if ret != nil {
 					logger.Info("command sync failed: ", ret.Error())
 				}
 			}
+
+			return protocol.MakeStatusReply("part sync finish")
 		}
 	}
 
@@ -329,7 +377,6 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 		}
 		return pubsub.Subscribe(mdb.hub, c, cmdLine[1:])
 	} else if cmdName == "publish" {
-		logger.Debug("cmdName: publish")
 		return pubsub.Publish(mdb.hub, cmdLine[1:])
 	} else if cmdName == "psubscribe" {
 		// PSUBSCRIBE pattern [pattern ...]
@@ -354,9 +401,12 @@ func (mdb *MultiDB) Exec(c redis.Connection, cmdLine [][]byte)  (result redis.Re
 	}
 	// 如果本节点时 slave 节点，那么不允许 slave 接受来自客户端的写操作（擅自进行写操作，应该由 master 节点进行同步）
 	// 这里统一拦截掉
-	cc := c.(*connection.Connection)
-	if !CanExecWriteCmd(mdb, cc, cmdName) {
-		return protocol.MakeErrReply("READONLY You can't write against a read only replica.")
+	// 可能会有 fakeConnection, 所以加个类型判断
+	if reflect.TypeOf(c).String() == reflect.TypeOf(&connection.Connection{}).String() {
+		cc := c.(*connection.Connection)
+		if !CanExecWriteCmd(mdb, cc, cmdName) {
+			return protocol.MakeErrReply("READONLY You can't write against a read only replica.")
+		}
 	}
 
 	// 处理来自 sentinel 服务器的 info 命令
@@ -432,18 +482,19 @@ func BGSaveRDB(db *MultiDB)	redis.Reply {
 	if db.aofHandler == nil {
 		return protocol.MakeErrReply("please enable aof before using save")
 	}
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				logger.Error(err)
-			}
-		}()
+	// 为了保证 发送 rdb 文件时，文件已经生成好了，这里去掉 go，改成串行
+	func() {
+		//defer func() {
+		//	if err := recover(); err != nil {
+		//		logger.Error(err)
+		//	}
+		//}()
 		err := db.aofHandler.Rewrite2RDB()
 		if err != nil {
 			logger.Error(err)
 		}
 	}()
-	return protocol.MakeStatusReply("Background saving started")
+	return protocol.MakeStatusReply("Background saving finished")
 }
 
 func (mdb *MultiDB) selectDB(dbIndex int) (*DB, *protocol.StandardErrReply) {
@@ -465,17 +516,24 @@ func (mdb *MultiDB) mustSelectDB(dbIndex int) *DB {
 
 // AfterClientClose does some clean after client close connection
 func (mdb *MultiDB) AfterClientClose(c redis.Connection) {
-
 }
 
 // Close graceful shutdown database
 func (mdb *MultiDB) Close() {
+	//在关闭之前，写入原有配置文件
+	if mdb.role != SentinelRole && utils.PathExists(config.Properties.ConfigFileName){
+		config.WriteToFile()
+	}
+	// 写入主从模式偏移量, 和 master 运行 id
+	mdb.WriteReplOffsetToFile()
+
 	// 不论主从节点，都可能开启了 aof
 	if mdb.aofHandler != nil {
 		mdb.aofHandler.Close()
 	}
 
 	if mdb.role == SlaveRole {
+		// 记录下
 		mdb.slaveOfNone()
 	}
 }
@@ -521,7 +579,6 @@ func (mdb *MultiDB) calcSlaves() []string {
 
 // 这里处理来自 sentinel 发送给 master or slave info 命令后，对 info 命令的回答
 func (mdb *MultiDB) handleInfo() redis.Reply {
-	logger.Info("handleInfo")
 	roleStr := "master"
 	if mdb.role == SlaveRole {
 		roleStr = "slave"
@@ -545,7 +602,6 @@ func (mdb *MultiDB) handleInfo() redis.Reply {
 	}
 	var content [][]byte
 	for _, s := range text {
-		logger.Info("s = ", s)
 		bs := []byte(s)
 		content = append(content, bs)
 	}

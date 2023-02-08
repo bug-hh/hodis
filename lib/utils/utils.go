@@ -1,6 +1,17 @@
 package utils
 
-import "strings"
+import (
+	"math/rand"
+	"os"
+	"strings"
+	"time"
+)
+
+const (
+	MasterRole = iota
+	SlaveRole
+	SentinelRole
+)
 
 func BytesEquals(a, b []byte) bool {
 	if (a == nil && b != nil) || (a != nil && b == nil) {
@@ -55,4 +66,25 @@ func FormatCmdLine(cmdLine [][]byte) string {
 		sArr = append(sArr, string(cmd))
 	}
 	return strings.Join(sArr, " ")
+}
+
+// 获取 [0, n) 范围内的随机数
+func RandomInt(n int) int {
+	//使用当前时间戳 生成真正的随机数字
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	//取二以下的正数 0,1
+	return r.Intn(n)
+}
+
+//PathExists 判断一个文件或文件夹是否存在
+//输入文件路径，根据返回的bool值来判断文件或文件夹是否存在
+func PathExists(path string) bool {
+	info, err := os.Stat(path)
+	if err == nil {
+		return info.Size() > 0
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return false
 }
